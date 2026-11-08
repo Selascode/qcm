@@ -1,0 +1,18 @@
+# Artefacts locaux
+.artifacts/
+*.log
+
+# Environnements Python
+.venv/
+__pycache__/
+*.pyc
+
+# Base de données locale
+db.sqlite3
+db.sqlite3-wal
+db.sqlite3-shm
+
+# OS / éditeurs
+.DS_Store
+.idea/
+.vscode/
