@@ -45,7 +45,7 @@ User (professeur, Django auth)
 │   ├── Step        : quiz, numéro, durée_s
 │   │   └── Question: step, uid (unique PAR quiz), énoncé, image?, type
 │   │                (unique/multiple), afficher_indice_multiple, ordre,
-│   │                couleur_slot (1..5)
+│   │                couleur_slot (1..4)
 │   │       └── Choice : question, lettre, texte, est_correct, position
 │   │
 │   └── Session     : quiz, code_session, statut (attente/en_cours/pause/fini),
@@ -64,9 +64,15 @@ User (professeur, Django auth)
 - **`Step.durée_s`** porte la durée, pas `Question`. Une étape regroupe 1 à 4 questions.
 - **`Question.uid`** est unique **par quiz**. Il est repris sur le tableau (discrètement)
   et sur le papier, pour la réconciliation.
-- **`Question.couleur_slot`** ∈ {1..5}. C'est l'indice de couleur de la question, pas
+- **`Question.couleur_slot`** ∈ {1..4}. C'est l'indice de couleur de la question, pas
   la couleur de l'élève. L'élève se voit attribuer une couleur (et un symbole) via
   `Participant.couleur_assignée`, tirée au hasard, persistée.
+- **Répartition élève → question** : les questions de l'étape sont ordonnées, et
+  l'élève reçoit l'indice `(couleur_assignée - 1) % nombre_de_questions`. Avec 4
+  questions, sa couleur tombe sur sa colonne ; avec 1 à 3, la répartition est
+  repliée pour que chaque élève ait une question (ADR 0004).
+- **`Question.quiz`** (FK dénormalisée, non éditable) double la hiérarchie
+  `Step → Quiz` uniquement pour garantir l'unicité `(quiz, uid)` en base.
 - **`Participant.graine_mélange`** permet de reconstituer l'ordre des boutons d'un élève
   après redémarrage (permutation déterministe à partir de la graine).
 - **`Answer.choix_sélectionnés`** stocke les lettres cochées (ex. `["A","C"]`), pas des
@@ -106,15 +112,16 @@ Tous les endpoints sont en JSON, sauf la page tableau (HTML) et l'admin.
 
 - Ne renvoie **jamais** `enonce`, `texte` (des choix), `est_correct`, ni le nombre de
   bonnes réponses.
-- Renvoie la **couleur** et le **symbole** de la question à laquelle l'élève doit répondre
-  (celle qui correspond à sa couleur assignée), le nombre de choix (pour générer les
-  boutons), et le temps restant calculé à partir de `ends_at` côté serveur.
+- Renvoie la **couleur** et le **symbole** de la question à laquelle l'élève doit répondre,
+  le nombre de choix, l'ordre mélangé des lettres (pour générer les boutons), l'`uid`
+  de la question (repère non secret) et le temps restant calculé à partir de
+  `ends_at` côté serveur.
 - Si l'élève a déjà répondu à la question courante, renvoie `deja_repondu: true` et
   l'écran « réponse validée » peut s'afficher.
 
 **Règles sur `/api/repondre/` :**
 
-- Refuse si `now() > ends_at` (avec tolérance de latence à régler, cf. `SPEC.md` §13).
+- Refuse si `now() > ends_at` (tolérance nulle : l'heure du serveur fait foi, ADR 0002).
 - Refuse si une réponse existe déjà pour `(participant, question)`.
 - Refuse si `id_client` a déjà été vu (anti-doublon de la file locale).
 - Ne renvoie **jamais** la bonne réponse.
@@ -225,12 +232,17 @@ def note_seance(notes_questions: list[float]) -> float:
 
 ## 8. Décisions liées
 
-Les choix structurants sont documentés dans `docs/decisions/`. À créer au fil de l'eau :
+Les choix structurants sont documentés dans `docs/decisions/`.
 
-- `0001-polling-plutot-que-websockets.md`
-- `0002-sqlite-wal-puis-postgres.md`
-- `0003-notation-fonction-pure.md`
-- `0004-uid-question-unique-par-quiz.md`
+ADR de la V1 (créés avec ce ticket) :
 
-Chaque ADR suit le format : contexte, options, décision, conséquences.
+- `0001-format-import-json-v1.md`
+- `0002-tolerance-latence-zero.md`
+- `0003-couleurs-et-symboles-v1.md`
+- `0004-repartition-eleves-couleurs.md`
+
+D'autres ADR restent à créer au fil de l'eau, sans numéro réservé : polling
+plutôt que WebSockets, SQLite WAL puis PostgreSQL, notation en fonction pure,
+uid de question unique par quiz. Chaque ADR suit le format : contexte,
+options, décision, conséquences.
 

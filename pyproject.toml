@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
+testpaths = ["qcm/tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 88
+extend-exclude = ["qcm/migrations"]

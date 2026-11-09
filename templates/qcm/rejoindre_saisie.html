@@ -1,0 +1,41 @@
+{% extends "qcm/base.html" %}
+{% block title %}Rejoindre une séance{% endblock %}
+{% block body_class %}page-joindre{% endblock %}
+{% block content %}
+<main class="carte">
+  <p class="sur-titre">QCM en direct</p>
+  <h1>Rejoindre une séance</h1>
+  <p class="sous-titre">
+    Saisissez le code affiché au tableau, ou scannez le QR code.
+  </p>
+  <form id="form-code" class="form-code">
+    <label for="code">Code de session</label>
+    <input
+      id="code"
+      name="code"
+      type="text"
+      inputmode="text"
+      maxlength="6"
+      autocomplete="off"
+      autocapitalize="characters"
+      spellcheck="false"
+      placeholder="ABC123"
+      required
+    >
+    <button type="submit" class="bouton-principal">Continuer</button>
+  </form>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+  (() => {
+    const formulaire = document.getElementById("form-code");
+    formulaire.addEventListener("submit", (evenement) => {
+      evenement.preventDefault();
+      const code = document.getElementById("code").value.trim().toUpperCase();
+      if (!code) return;
+      window.location.href = "/rejoindre/" + encodeURIComponent(code) + "/";
+    });
+  })();
+</script>
+{% endblock %}

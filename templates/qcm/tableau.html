@@ -1,0 +1,143 @@
+{% extends "qcm/base.html" %}
+{% load static %}
+{% block title %}Tableau — {{ session.quiz.titre }}{% endblock %}
+{% block body_class %}page-tableau{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'qcm/tableau.css' %}">
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+>
+<script
+  defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
+></script>
+<script
+  defer
+  src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "$", right: "$", display: false},
+          {left: "\\(", right: "\\)", display: false},
+          {left: "\\[", right: "\\]", display: true}
+        ]
+      });
+    }
+  });
+</script>
+{% endblock %}
+{% block content %}
+{% csrf_token %}
+<main class="tableau-app">
+  <header class="barre-tableau">
+    <div class="titre-bloc">
+      <p class="sur-titre">Tableau de séance</p>
+      <h1>{{ session.quiz.titre }}</h1>
+      <p class="meta-tableau">
+        Code <strong>{{ session.code_session }}</strong>
+        {% if session.statut != "attente" %}
+          · Étape <span id="etape">{{ session.etape_courante }}</span>/{{ nb_etapes }}
+        {% endif %}
+        · <span id="statut">{{ session.get_statut_display }}</span>
+      </p>
+    </div>
+    <div class="minuteur-bloc">
+      <span class="minuteur-label">Temps restant</span>
+      <span class="minuteur-tableau" id="minuteur">--:--</span>
+    </div>
+    <div class="controles" id="controles">
+      {% if session.statut == "attente" %}
+        <button type="button" class="bouton-action primaire" data-action="demarrer">Démarrer</button>
+      {% endif %}
+      {% if session.statut == "en_cours" %}
+        <button type="button" class="bouton-action" data-action="pause">Pause</button>
+      {% endif %}
+      {% if session.statut == "pause" %}
+        <button type="button" class="bouton-action primaire" data-action="reprendre">Reprendre</button>
+      {% endif %}
+      {% if session.statut == "en_cours" or session.statut == "pause" %}
+        <span class="groupe-temps">
+          <button type="button" data-action="plus_temps" data-delta="30">+30 s</button>
+          <button type="button" data-action="plus_temps" data-delta="60">+1 min</button>
+          <button type="button" data-action="plus_temps" data-delta="120">+2 min</button>
+        </span>
+        <button type="button" class="bouton-action" data-action="precedent">Précédent</button>
+        <button type="button" class="bouton-action" data-action="suivant">Suivant</button>
+      {% endif %}
+    </div>
+  </header>
+
+  <section class="zone-principale">
+    {% if session.statut == "attente" %}
+      <div class="attente-tableau">
+        <p class="sur-titre">Séance en attente</p>
+        <p class="code-geant">{{ session.code_session }}</p>
+        <p>Les élèves rejoignent avec ce code ou en scannant le QR code.</p>
+      </div>
+    {% elif session.statut == "fini" %}
+      <div class="attente-tableau">
+        <p class="sur-titre">Séance terminée</p>
+        <p>Les réponses sont enregistrées.</p>
+      </div>
+    {% else %}
+      <div class="grille-questions">
+        {% for carte in cartes %}
+          <article
+            class="question-carte"
+            data-question-id="{{ carte.question.pk }}"
+            style="--couleur: {{ carte.couleur.hex }}; --couleur-texte: {{ carte.couleur.couleur_texte }};"
+          >
+            <div class="question-entete">
+              <span
+                class="pastille"
+                style="background: {{ carte.couleur.hex }}; color: {{ carte.couleur.couleur_texte }};"
+              >{{ carte.couleur.symbole }}</span>
+              <span class="uid">{{ carte.question.uid }}</span>
+              <span class="compteur" data-compteur>{{ carte.nb_reponses }}</span>
+            </div>
+            <div class="enonce">{{ carte.question.enonce|linebreaksbr }}</div>
+            {% if carte.question.image %}
+              <img class="image-question" src="{{ carte.question.image.url }}" alt="">
+            {% endif %}
+            <ul class="choix-liste">
+              {% for choix in carte.question.choices.all %}
+                <li>
+                  <span class="lettre">{{ choix.lettre }}</span>
+                  <span class="texte-choix">{{ choix.texte }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </article>
+        {% empty %}
+          <p class="aucune-question">Aucune question à cette étape.</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </section>
+
+  <aside class="panneau">
+    <div class="qr">{{ qr_svg|safe }}</div>
+    <p class="lien-rejoindre">{{ url_rejoindre }}</p>
+    <div class="compteurs">
+      <p><strong id="nb-reponses">{{ nb_reponses_etape }}</strong> réponse(s) cette étape</p>
+      <p><strong id="nb-participants">{{ nb_participants }}</strong> élève(s) connecté(s)</p>
+    </div>
+  </aside>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.QCM_TABLEAU = {
+    code: "{{ session.code_session|escapejs }}",
+    statut: "{{ session.statut|escapejs }}",
+    etape: {{ session.etape_courante }},
+    temps: {% if temps_restant_s is not None %}{{ temps_restant_s }}{% else %}null{% endif %}
+  };
+</script>
+<script src="{% static 'qcm/tableau.js' %}"></script>
+{% endblock %}
