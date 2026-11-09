@@ -95,6 +95,7 @@ body.page-eleve {
 
 .choix {
   min-height: 88px;
+  min-width: 44px;
   border: 3px solid var(--bord);
   border-radius: 16px;
   background: #fff;
@@ -103,6 +104,14 @@ body.page-eleve {
   font-weight: 900;
   touch-action: manipulation;
   transition: background 120ms ease, border-color 120ms ease;
+}
+
+.choix:focus-visible,
+.valider:focus-visible,
+.bouton-principal:focus-visible,
+.bouton-secondaire:focus-visible {
+  outline: 4px solid #0b3d66;
+  outline-offset: 3px;
 }
 
 .choix[aria-pressed="true"] {

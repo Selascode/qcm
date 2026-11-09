@@ -4,9 +4,10 @@ import json
 import uuid
 from datetime import timedelta
 
+from django.contrib.auth.hashers import make_password
 from django.utils import timezone
 
-from qcm.models import Session
+from qcm.models import Groupe, Session, Student
 from qcm.services import demarrer_session
 
 
@@ -110,3 +111,45 @@ def expirer_etape(session: Session) -> None:
         ends_at=timezone.now() - timedelta(seconds=1)
     )
     session.refresh_from_db()
+
+
+def creer_groupe(proprietaire, nom: str = "ISIA4") -> Groupe:
+    return Groupe.objects.create(nom=nom, proprietaire=proprietaire)
+
+
+def creer_eleve(
+    groupe: Groupe,
+    *,
+    nom: str = "Dupont",
+    prenom: str = "Marie",
+    code_etudiant: str = "MD0001",
+    pin: str = "123456",
+) -> Student:
+    return Student.objects.create(
+        nom=nom,
+        prenom=prenom,
+        code_etudiant=code_etudiant,
+        pin_hash=make_password(pin),
+        groupe=groupe,
+    )
+
+
+def rejoindre_eleve(client, session: Session, code_etudiant: str, pin: str):
+    return client.post(
+        "/api/rejoindre/",
+        data=json.dumps(
+            {
+                "code": session.code_session,
+                "code_etudiant": code_etudiant,
+                "pin": pin,
+            }
+        ),
+        content_type="application/json",
+    )
+
+
+def etat_participants(client, session: Session):
+    return client.get(
+        "/api/etat_participants/",
+        {"code": session.code_session},
+    )

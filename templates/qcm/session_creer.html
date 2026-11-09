@@ -18,6 +18,17 @@
           <option value="{{ quiz.pk }}">{{ quiz.titre }}</option>
         {% endfor %}
       </select>
+      <label for="groupe">Groupe (optionnel)</label>
+      <select id="groupe" name="groupe">
+        <option value="">Séance libre (démo, sans groupe)</option>
+        {% for groupe in groupes %}
+          <option value="{{ groupe.pk }}">{{ groupe.nom }}</option>
+        {% endfor %}
+      </select>
+      <p class="aide-form">
+        Avec un groupe, les élèves se connectent avec leur identifiant et leur
+        PIN. Sans groupe, la séance reste ouverte comme en démo.
+      </p>
       <button type="submit" class="bouton-principal">Créer la séance</button>
     </form>
   {% else %}

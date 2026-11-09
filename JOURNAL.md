@@ -128,3 +128,57 @@ réponses / participants discrets en pied de page.
 **Décision.** La demande humaine la plus récente prime sur la mise en avant du
 compteur de salon d'attente : le compteur reste visible et rafraîchi, mais
 discret en pied de page.
+
+## 2026-11-09 — V2 : groupes, comptes élèves et notes
+
+**Objectif.** Implémenter la V2 du ticket #5 : groupes, import CSV/JSON,
+identifiants + PIN, un appareil actif, page participants, notation pure,
+résultats et accessibilité.
+
+**Prompt / demande.** Issue #5 « Implémente la V2 du projet QCM (comptes,
+groupes et notes) ». Demande « Lis l'issue pour la V2 et propose d'abord un
+plan (6-10 lignes) avant tout diff. Attends ma validation. » (comment
+`6739163139`) ; plan de 10 lignes publié (comment `6739211714`) puis validé
+par « Je valides tu peux démarer l'implémentation » (comment `6739251369`).
+
+**Réalisé.**
+
+- Modèles `Groupe`, `Student`, `Session.groupe`, `Participant.student` +
+  `derniere_activite`, et barème `Quiz.penalite_active` /
+  `Quiz.facteur_penalite` ; migrations nullable → vérification →
+  non-nullable pour `Student.groupe` (ADR `0006-session-groupe.md`).
+- `import_participants` (CSV/JSON, transactionnel, erreurs claires) et
+  `liste_identifiants` (feuille HTML imprimable). Les PIN ne sont stockés
+  qu'en hash ; le fichier d'identifiants en clair est ignoré par Git
+  (ADR `0007-import-pdf-v3.md` pour le report du PDF,
+  `0008-identifiants-et-pin.md` pour le stockage et la distribution).
+- Authentification élève identifiant + PIN, message générique sans oracle,
+  jeton régénéré à chaque connexion (ancien appareil → 401), bouton
+  « Réinitialiser » côté prof.
+- Page `/session/<code>/participants/` avec liste du groupe, statut
+  « Connecté » irréversible au polling 1–2 s, compteur X/Y, cas
+  `groupe = NULL` ; `/api/etat_participants/` sans PIN ni réponse.
+- `notation.py` (`note_question`, `note_seance`) et vue `/resultats/`
+  calculée à la volée (notes par élève avec plancher 0, taux de réussite par
+  question).
+- Accessibilité : symboles conservés sur téléphone et tableau, police Atkinson
+  Hyperlegible en local (SIL OFL), contraste AA vérifié par test, cibles
+  ≥ 44 px.
+
+**Vérifications.** `pytest` : 169 tests passés (103 V1 + 66 V2).
+`ruff check .`, `manage.py check`, `makemigrations --check` : OK. Captures
+avant/après dans `docs/screenshots/v2/`.
+
+**Problèmes / décisions.**
+
+- `Student` n'existait pas dans le code V1 malgré `ARCHITECTURE.md` : le
+  modèle est créé en V2 avec `Groupe`.
+- `Session.groupe = NULL` conserve la connexion anonyme de la démo ; une
+  séance avec groupe exige identifiant + PIN.
+- Le `★` de la spécification n'est pas utilisé : le modèle plafonne à quatre
+  questions par étape (quatre couleurs), un cinquième symbole n'aurait pas de
+  question correspondante au tableau. Les quatre symboles ● ▲ ■ ◆ sont
+  distincts et testés.
+- Le PIN en clair n'existe que dans le fichier produit à l'import, à
+  distribuer puis supprimer ; la base ne contient que `pin_hash`.
+

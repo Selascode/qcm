@@ -16,6 +16,12 @@
     <a class="bouton-principal" href="{% url 'qcm:tableau' session.code_session %}">
       Ouvrir le tableau
     </a>
+    <a class="bouton-secondaire" href="{% url 'qcm:participants' session.code_session %}">
+      Voir les participants
+    </a>
+    <a class="bouton-secondaire" href="{% url 'qcm:resultats' session.code_session %}">
+      Résultats
+    </a>
     <a class="bouton-secondaire" href="{% url 'qcm:session_creer' %}">
       Créer une autre séance
     </a>

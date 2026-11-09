@@ -11,10 +11,11 @@ from datetime import timedelta
 import qrcode
 import qrcode.image.svg
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 
-from qcm.models import Answer, Session
+from qcm.couleurs import infos_couleur
+from qcm.models import Answer, Participant, Session
 
 
 class ErreurPilotage(ValueError):
@@ -283,3 +284,108 @@ def generer_qr_svg(url: str) -> str:
     tampon = io.BytesIO()
     image.save(tampon)
     return tampon.getvalue().decode("utf-8")
+
+
+def _secondes_depuis(maintenant, instant) -> int | None:
+    if instant is None:
+        return None
+    return max(0, int((maintenant - instant).total_seconds()))
+
+
+def marquer_activite(participant, maintenant=None) -> None:
+    """Met à jour la dernière activité, au plus toutes les 10 secondes.
+
+    Le polling est de 1 à 2 s : sans seuil, chaque élève écrirait en base à
+    chaque requête. Dix secondes suffisent pour l'indicateur « il y a X s ».
+    La colonne n'est jamais remise à ``NULL`` : le statut « Connecté » reste
+    acquis pendant la séance.
+    """
+    maintenant = _maintenant(maintenant)
+    seuil = maintenant - timedelta(seconds=10)
+    (
+        Participant.objects.filter(pk=participant.pk)
+        .filter(Q(derniere_activite__isnull=True) | Q(derniere_activite__lt=seuil))
+        .update(derniere_activite=maintenant)
+    )
+
+
+def etat_participants(session: Session, maintenant=None) -> dict:
+    """Données du panneau participants, sans PIN, hash ni réponse.
+
+    Séance rattachée à un groupe : la liste complète des élèves du groupe, avec
+    ``connecte`` (irréversible) et ``derniere_activite_s``. Séance libre :
+    uniquement les participants effectivement connectés.
+    """
+    maintenant = _maintenant(maintenant)
+
+    if session.groupe_id is None:
+        libres = []
+        for participant in session.participants.select_related("student").order_by(
+            "id"
+        ):
+            libres.append(
+                {
+                    "participant_id": participant.pk,
+                    "nom": participant.student.nom
+                    if participant.student_id
+                    else None,
+                    "prenom": participant.student.prenom
+                    if participant.student_id
+                    else None,
+                    "code_etudiant": participant.student.code_etudiant
+                    if participant.student_id
+                    else None,
+                    "symbole": participant.symbole,
+                    "couleur": infos_couleur(participant.couleur_assignee),
+                    "connecte": participant.derniere_activite is not None,
+                    "derniere_activite_s": _secondes_depuis(
+                        maintenant, participant.derniere_activite
+                    ),
+                }
+            )
+        return {
+            "ok": True,
+            "groupe": None,
+            "connectes": len(libres),
+            "total": len(libres),
+            "participants": libres,
+        }
+
+    participants = {
+        participant.student_id: participant
+        for participant in session.participants.filter(student__isnull=False).only(
+            "student_id",
+            "derniere_activite",
+            "couleur_assignee",
+        )
+    }
+    lignes = []
+    for student in session.groupe.etudiants.order_by("nom", "prenom"):
+        participant = participants.get(student.pk)
+        lignes.append(
+            {
+                "participant_id": participant.pk if participant else None,
+                "nom": student.nom,
+                "prenom": student.prenom,
+                "code_etudiant": student.code_etudiant,
+                "symbole": participant.symbole if participant else None,
+                "couleur": infos_couleur(participant.couleur_assignee)
+                if participant
+                else None,
+                "connecte": participant is not None
+                and participant.derniere_activite is not None,
+                "derniere_activite_s": _secondes_depuis(
+                    maintenant, participant.derniere_activite
+                )
+                if participant
+                else None,
+            }
+        )
+    connectes = sum(1 for ligne in lignes if ligne["connecte"])
+    return {
+        "ok": True,
+        "groupe": session.groupe.nom,
+        "connectes": connectes,
+        "total": len(lignes),
+        "participants": lignes,
+    }

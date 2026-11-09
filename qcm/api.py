@@ -9,6 +9,8 @@ import json
 import uuid
 
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.hashers import check_password, make_password
+from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -18,7 +20,10 @@ from django.views.decorators.http import require_GET, require_POST
 
 from qcm import services
 from qcm.couleurs import infos_couleur
-from qcm.models import Answer, Participant, Question, Session
+from qcm.models import Answer, Participant, Question, Session, Student
+
+# Hash factice : un identifiant inconnu et un PIN faux coûtent le même temps.
+_HASH_INCONNU = make_password("identifiant-inconnu")
 
 
 def _json(request):
@@ -40,15 +45,83 @@ def _participant(request):
         jeton = uuid.UUID(valeur)
     except (TypeError, ValueError, AttributeError):
         return None
-    return (
+    participant = (
         Participant.objects.select_related("session__quiz")
         .filter(jeton_appareil=jeton)
         .first()
     )
+    if participant is not None:
+        services.marquer_activite(participant)
+    return participant
 
 
 def _couleur_question(question: Question) -> dict:
     return infos_couleur(question.couleur_slot)
+
+
+def _reponse_participant(session: Session, participant: Participant) -> JsonResponse:
+    return JsonResponse(
+        {
+            "ok": True,
+            "code": session.code_session,
+            "session_id": session.pk,
+            "participant_id": participant.pk,
+            "jeton": str(participant.jeton_appareil),
+            "couleur": infos_couleur(participant.couleur_assignee),
+            "statut": session.statut,
+        }
+    )
+
+
+def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
+    """Connexion d'un élève identifié : identifiant + PIN, puis jeton unique."""
+    code_etudiant = str(donnees.get("code_etudiant") or "").strip()
+    pin = str(donnees.get("pin") or "").strip()
+    if not code_etudiant or not pin:
+        return _erreur("identifiants_requis", 401)
+
+    student = Student.objects.filter(
+        code_etudiant__iexact=code_etudiant,
+        groupe_id=session.groupe_id,
+    ).first()
+    hash_a_verifier = student.pin_hash if student else _HASH_INCONNU
+    pin_valide = check_password(pin, hash_a_verifier)
+    if student is None or not pin_valide:
+        # Même raison et même code pour un identifiant inconnu et un PIN faux.
+        return _erreur("identifiants_invalides", 401)
+
+    maintenant = timezone.now()
+    with transaction.atomic():
+        participant = (
+            Participant.objects.select_for_update()
+            .filter(session=session, student=student)
+            .first()
+        )
+        if participant is None:
+            try:
+                with transaction.atomic():
+                    participant = Participant.objects.create(
+                        session=session,
+                        student=student,
+                        derniere_activite=maintenant,
+                    )
+            except IntegrityError:
+                participant = Participant.objects.select_for_update().get(
+                    session=session,
+                    student=student,
+                )
+                participant.jeton_appareil = uuid.uuid4()
+                participant.derniere_activite = maintenant
+                participant.save(
+                    update_fields=["jeton_appareil", "derniere_activite"]
+                )
+        else:
+            # Un seul appareil actif : l'ancien jeton ne répond plus (401).
+            participant.jeton_appareil = uuid.uuid4()
+            participant.derniere_activite = maintenant
+            participant.save(update_fields=["jeton_appareil", "derniere_activite"])
+
+    return _reponse_participant(session, participant)
 
 
 @csrf_exempt
@@ -58,9 +131,16 @@ def rejoindre(request):
     if not isinstance(donnees, dict):
         return _erreur("json_invalide")
     code = str(donnees.get("code") or "").strip().upper()
-    session = Session.objects.select_related("quiz").filter(code_session=code).first()
+    session = (
+        Session.objects.select_related("quiz", "groupe")
+        .filter(code_session=code)
+        .first()
+    )
     if session is None:
         return _erreur("code_inconnu", 404)
+
+    if session.groupe_id is not None:
+        return _rejoindre_groupe(donnees, session)
 
     participant = None
     jeton_brut = donnees.get("jeton")
@@ -74,19 +154,14 @@ def rejoindre(request):
                 session=session, jeton_appareil=jeton
             ).first()
     if participant is None:
-        participant = Participant.objects.create(session=session)
+        participant = Participant.objects.create(
+            session=session,
+            derniere_activite=timezone.now(),
+        )
+    else:
+        services.marquer_activite(participant)
 
-    return JsonResponse(
-        {
-            "ok": True,
-            "code": session.code_session,
-            "session_id": session.pk,
-            "participant_id": participant.pk,
-            "jeton": str(participant.jeton_appareil),
-            "couleur": infos_couleur(participant.couleur_assignee),
-            "statut": session.statut,
-        }
-    )
+    return _reponse_participant(session, participant)
 
 
 def _etat_question(participant, question) -> dict:
@@ -249,6 +324,24 @@ def repondre(request):
             return _erreur("deja_repondu", 409)
 
     return JsonResponse({"ok": True, "recu": True, "id_client": str(id_client)})
+
+
+@login_required
+@require_GET
+def etat_participants(request):
+    """État de la page participants (prof propriétaire uniquement).
+
+    Ne renvoie jamais de PIN, de hash, d'énoncé, de texte de choix ni de
+    réponse d'élève.
+    """
+    code = str(request.GET.get("code") or "").strip().upper()
+    session = get_object_or_404(
+        Session.objects.select_related("quiz", "groupe"),
+        code_session=code,
+    )
+    if session.quiz.proprietaire_id != request.user.pk:
+        raise PermissionDenied("Cette séance ne vous appartient pas.")
+    return JsonResponse(services.etat_participants(session))
 
 
 def _questions_prof(session: Session) -> list[dict]:

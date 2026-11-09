@@ -76,6 +76,12 @@
         >Terminer la séance</button>
       {% endif %}
     </div>
+    <nav class="liens-tableau" aria-label="Navigation de la séance">
+      <a href="{% url 'qcm:participants' session.code_session %}">
+        Voir les participants
+      </a>
+      <a href="{% url 'qcm:resultats' session.code_session %}">Résultats</a>
+    </nav>
   </header>
 
   <section class="zone-principale">

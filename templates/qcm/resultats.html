@@ -1,0 +1,119 @@
+{% extends "qcm/base.html" %}
+{% load static %}
+{% block title %}Résultats — {{ session.quiz.titre }}{% endblock %}
+{% block body_class %}page-prof{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'qcm/prof.css' %}">
+{% endblock %}
+{% block content %}
+<main class="prof-app">
+  <header class="barre-prof">
+    <div>
+      <p class="sur-titre">Séance {{ session.code_session }}</p>
+      <h1>Résultats — {{ session.quiz.titre }}</h1>
+      <p class="sous-titre">
+        {{ nb_participants }} participant(s) · pénalité
+        {% if session.quiz.penalite_active %}activée{% else %}désactivée{% endif %}
+        (facteur {{ session.quiz.facteur_penalite|floatformat:2 }})
+      </p>
+    </div>
+    <nav class="liens-prof" aria-label="Navigation de la séance">
+      <a class="bouton-secondaire" href="{% url 'qcm:tableau' session.code_session %}">
+        Tableau
+      </a>
+      <a class="bouton-secondaire" href="{% url 'qcm:participants' session.code_session %}">
+        Participants
+      </a>
+    </nav>
+  </header>
+
+  <section class="bloc-resultats">
+    <h2>Notes par élève</h2>
+    <p class="aide">
+      La note d'une question peut être négative ; le total est plafonné à 0.
+      Une case « — » signifie que l'élève n'a pas répondu à cette question.
+    </p>
+    <div class="table-scroll">
+      <table class="table-prof">
+        <thead>
+          <tr>
+            <th>Élève</th>
+            {% for stat in stats_questions %}
+              <th title="{{ stat.question.enonce }}">{{ stat.question.uid }}</th>
+            {% endfor %}
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ligne in lignes_participants %}
+            <tr>
+              <td>
+                {% if ligne.participant.student %}
+                  {{ ligne.participant.student }}
+                {% else %}
+                  {{ ligne.participant }}
+                {% endif %}
+              </td>
+              {% for detail in ligne.notes %}
+                <td class="note-question">
+                  {% if detail.repondu %}{{ detail.note|floatformat:2 }}{% else %}—{% endif %}
+                </td>
+              {% endfor %}
+              <td class="total"><strong>{{ ligne.total|floatformat:2 }}</strong></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="{{ stats_questions|length|add:2 }}" class="table-vide">
+              Aucun participant pour le moment.
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="bloc-resultats">
+    <h2>Taux de réussite par question</h2>
+    <p class="aide">
+      Taux = réponses entièrement correctes / réponses reçues pour la question.
+      Une réponse partielle ne compte pas comme une réussite.
+    </p>
+    <div class="table-scroll">
+      <table class="table-prof">
+        <thead>
+          <tr>
+            <th>Question</th>
+            <th>Énoncé</th>
+            <th>Réponses</th>
+            <th>Correctes</th>
+            <th>Taux</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for stat in stats_questions %}
+            <tr>
+              <td class="identifiant">{{ stat.question.uid }}</td>
+              <td>{{ stat.question.enonce }}</td>
+              <td>{{ stat.nb_reponses }}</td>
+              <td>{{ stat.nb_correctes }}</td>
+              <td class="taux">
+                {% if stat.taux_reussite is not None %}
+                  {{ stat.taux_reussite|floatformat:1 }} %
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="table-vide">Aucune question.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="note-bas">
+    Les notes sont calculées à la volée à partir des réponses enregistrées ;
+    elles ne sont pas stockées.
+  </p>
+</main>
+{% endblock %}

@@ -304,3 +304,30 @@ body.page-tableau {
 .aucune-question {
   color: #a9b6c6;
 }
+
+.liens-tableau {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  padding-top: 4px;
+  border-top: 1px solid #29313c;
+}
+
+.liens-tableau a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid #3a4553;
+  border-radius: 10px;
+  color: #cfe0f5;
+  font-weight: 800;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.liens-tableau a:hover {
+  background: #222a35;
+  color: #fff;
+}

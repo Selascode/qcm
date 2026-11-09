@@ -3,13 +3,47 @@
 {% block title %}Rejoindre {{ session.quiz.titre }}{% endblock %}
 {% block body_class %}page-joindre{% endblock %}
 {% block content %}
-<main class="carte" data-code="{{ session.code_session|escapejs }}">
+<main
+  class="carte"
+  data-code="{{ session.code_session|escapejs }}"
+  data-groupe="{% if session.groupe %}1{% else %}0{% endif %}"
+>
   <p class="sur-titre">QCM en direct</p>
   <p class="code-session">{{ session.code_session }}</p>
   <h1>{{ session.quiz.titre }}</h1>
   <p class="sous-titre">
     Vous allez répondre sur ce téléphone. Aucun énoncé n'y sera affiché.
   </p>
+  {% if session.groupe %}
+    <div class="form-code form-rejoindre">
+      <label for="code_etudiant">Identifiant</label>
+      <input
+        id="code_etudiant"
+        name="code_etudiant"
+        type="text"
+        inputmode="text"
+        maxlength="32"
+        autocomplete="username"
+        autocapitalize="characters"
+        spellcheck="false"
+        required
+      >
+      <label for="pin">Code PIN</label>
+      <input
+        id="pin"
+        name="pin"
+        type="password"
+        inputmode="numeric"
+        pattern="[0-9]{4,6}"
+        maxlength="6"
+        autocomplete="current-password"
+        required
+      >
+      <p class="aide-form">
+        Ces informations vous ont été remises sur votre feuille personnelle.
+      </p>
+    </div>
+  {% endif %}
   <button id="btn-rejoindre" type="button" class="bouton-principal">
     Rejoindre la séance
   </button>
