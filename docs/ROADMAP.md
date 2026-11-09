@@ -64,8 +64,8 @@ Objectif : une séance complète, avec redémarrage serveur au milieu, sans pert
 
 ### Élèves
 - [ ] Import CSV de la liste de classe (nom, prénom)
-- [ ] Import PDF de la liste de classe (nom, prénom)
 - [ ] Import JSON de la liste de classe (nom, prénom)
+- [ ] Chaques participants doivent appartenir à un groupe
 - [ ] Génération identifiant + PIN, hash du PIN
 - [ ] Liste imprimable pour la distribution
 - [ ] Un seul appareil actif par élève (nouvelle connexion remplace l'ancienne)
