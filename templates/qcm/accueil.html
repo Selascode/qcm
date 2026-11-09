@@ -13,6 +13,11 @@
     <a class="bouton-principal" href="{% url 'qcm:rejoindre_saisie' %}">
       Rejoindre une séance
     </a>
+    {% if user.is_authenticated %}
+      <a class="bouton-secondaire" href="{% url 'qcm:session_creer' %}">
+        Créer une séance
+      </a>
+    {% endif %}
     <a class="bouton-secondaire" href="/admin/">Espace professeur</a>
   </div>
 </main>

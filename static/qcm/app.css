@@ -162,6 +162,51 @@ button {
   border-color: var(--accent);
 }
 
+.form-code select {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  border: 2px solid var(--bord);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--texte);
+}
+
+.form-code select:focus {
+  outline: 3px solid #a9c7e4;
+  border-color: var(--accent);
+}
+
+.qr-session {
+  width: min(100%, 300px);
+  margin: 1.4rem auto;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--bord);
+  border-radius: 16px;
+}
+
+.qr-session svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lien-session {
+  margin: 0;
+  color: var(--texte-doux);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: center;
+  word-break: break-all;
+}
+
+.retour-accueil {
+  margin: 1.6rem 0 0;
+}
+
 .code-session {
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-size: 1.35rem;

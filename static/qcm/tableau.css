@@ -12,8 +12,8 @@ body.page-tableau {
   margin: 0 auto;
   padding: 18px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 310px;
-  grid-template-rows: auto 1fr;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
   gap: 16px;
 }
 
@@ -101,6 +101,16 @@ body.page-tableau {
   background: #1f6feb;
   border-color: #1f6feb;
   color: #fff;
+}
+
+.controles .danger {
+  background: #5c1f1f;
+  border-color: #8d3333;
+  color: #ffe8e8;
+}
+
+.controles .danger:hover {
+  background: #712727;
 }
 
 .groupe-temps {
@@ -218,51 +228,44 @@ body.page-tableau {
   min-width: 0;
 }
 
-.panneau {
-  align-self: start;
-  position: sticky;
-  top: 18px;
+.pied-tableau {
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: #151a21;
-  border: 1px solid #29313c;
-  border-radius: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 2px 6px 10px;
+  color: #6f7d8d;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
 }
 
-.qr svg {
-  display: block;
-  width: 100%;
-  height: auto;
-  background: #fff;
-  padding: 10px;
-  border-radius: 12px;
-}
-
-.lien-rejoindre {
-  margin: 0;
+.pied-tableau strong {
   color: #8fa0b5;
-  font-family: ui-monospace, monospace;
-  font-size: 0.74rem;
-  line-height: 1.35;
-  word-break: break-all;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
-.compteurs {
-  border-top: 1px solid #29313c;
-  padding-top: 10px;
+.pied-separateur {
+  color: #43505f;
 }
 
-.compteurs p {
-  margin: 4px 0;
-  color: #d9e2ee;
-  font-size: 1rem;
+.lien-fin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 22px;
+  padding: 12px 22px;
+  border-radius: 10px;
+  background: #1f6feb;
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
 }
 
-.compteurs strong {
-  color: #ffd166;
-  font-size: 1.7rem;
+.lien-fin:hover {
+  background: #2b7df0;
 }
 
 .attente-tableau {
@@ -300,27 +303,4 @@ body.page-tableau {
 
 .aucune-question {
   color: #a9b6c6;
-}
-
-@media (max-width: 1100px) {
-  .tableau-app {
-    grid-template-columns: 1fr;
-  }
-
-  .panneau {
-    position: static;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  .qr {
-    width: 150px;
-  }
-
-  .compteurs {
-    border-top: 0;
-    border-left: 1px solid #29313c;
-    padding: 0 0 0 14px;
-  }
 }

@@ -175,6 +175,19 @@ def ajouter_temps(session: Session, secondes, maintenant=None) -> Session:
         return session
 
 
+def terminer_session(session: Session) -> Session:
+    """Clôture explicite de la séance (statut ``fini``). Idempotent."""
+    with transaction.atomic():
+        session = _session_verrouillee(session.pk)
+        if session.statut == Session.STATUT_FINI:
+            return session
+        session.statut = Session.STATUT_FINI
+        session.ends_at = None
+        session.reste_en_pause = None
+        session.save(update_fields=["statut", "ends_at", "reste_en_pause"])
+        return session
+
+
 def etape_suivante(session: Session, maintenant=None) -> Session:
     maintenant = _maintenant(maintenant)
     with transaction.atomic():

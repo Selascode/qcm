@@ -33,13 +33,13 @@ Objectif : une séance complète, avec redémarrage serveur au milieu, sans pert
 - [ ] Saisie complète via admin Django (images, KaTeX, code)
 
 ### Séance
-- [ ] Code de session + QR code généré à la création
-- [ ] Salon d'attente pour les élèves
+- [x] Code de session + QR code généré à la création
+- [x] Salon d'attente pour les élèves
 - [ ] 1 à 4 questions par étape, chacune avec sa couleur (`couleur_slot`)
 - [ ] Attribution aléatoire et persistée de la couleur + symbole par élève
 - [ ] Ordre des boutons mélangé par élève (`graine_mélange` persistée)
 - [ ] Passage automatique à l'étape suivante à `ends_at`
-- [ ] Contrôles prof : pause / reprise / +temps / suivant / précédent
+- [x] Contrôles prof : pause / reprise / +temps / suivant / précédent / terminer
 - [ ] Reconnexion : l'élève retrouve sa séance, son étape et ses réponses
 
 ### Réseau
@@ -51,6 +51,14 @@ Objectif : une séance complète, avec redémarrage serveur au milieu, sans pert
 - [ ] KaTeX sur le tableau
 - [ ] Images sur le tableau
 - [ ] Nombre de réponses reçues en temps réel sur le tableau
+
+### Dette V1 — interface et usage (ticket #3)
+- [x] Bouton « Terminer la séance » sur le tableau et le téléphone, sans page finale bloquante
+- [x] Accès iPhone sur le Wi-Fi local documenté et `ALLOWED_HOSTS` configuré
+- [x] Nombre de participants connectés en temps réel sur la page pré-séance
+- [x] QR code affiché uniquement sur la page initiale de la session
+- [x] Libellés français dans les modèles et les templates
+- [x] Colonne « Groupe » dans la vue Participants (« — » en attendant la V2)
 
 ### Sécurité
 - [ ] Test automatique : aucun champ `enonce` / `texte` / `est_correct` dans les réponses élèves

@@ -68,6 +68,12 @@
         </span>
         <button type="button" class="bouton-action" data-action="precedent">Précédent</button>
         <button type="button" class="bouton-action" data-action="suivant">Suivant</button>
+        <button
+          type="button"
+          class="bouton-action danger"
+          data-action="terminer"
+          data-redirection="{% url 'qcm:accueil' %}"
+        >Terminer la séance</button>
       {% endif %}
     </div>
   </header>
@@ -77,12 +83,13 @@
       <div class="attente-tableau">
         <p class="sur-titre">Séance en attente</p>
         <p class="code-geant">{{ session.code_session }}</p>
-        <p>Les élèves rejoignent avec ce code ou en scannant le QR code.</p>
+        <p>Les élèves rejoignent avec ce code.</p>
       </div>
     {% elif session.statut == "fini" %}
       <div class="attente-tableau">
         <p class="sur-titre">Séance terminée</p>
         <p>Les réponses sont enregistrées.</p>
+        <a class="lien-fin" href="{% url 'qcm:accueil' %}">Terminer la séance</a>
       </div>
     {% else %}
       <div class="grille-questions">
@@ -120,14 +127,17 @@
     {% endif %}
   </section>
 
-  <aside class="panneau">
-    <div class="qr">{{ qr_svg|safe }}</div>
-    <p class="lien-rejoindre">{{ url_rejoindre }}</p>
-    <div class="compteurs">
-      <p><strong id="nb-reponses">{{ nb_reponses_etape }}</strong> réponse(s) cette étape</p>
-      <p><strong id="nb-participants">{{ nb_participants }}</strong> élève(s) connecté(s)</p>
-    </div>
-  </aside>
+  <footer class="pied-tableau" aria-label="Compteurs de séance">
+    <span>
+      <strong id="nb-reponses">{{ nb_reponses_etape }}</strong>
+      réponse(s) cette étape
+    </span>
+    <span class="pied-separateur" aria-hidden="true">·</span>
+    <span>
+      <strong id="nb-participants">{{ nb_participants }}</strong>
+      élève(s) connecté(s)
+    </span>
+  </footer>
 </main>
 {% endblock %}
 {% block scripts %}

@@ -46,7 +46,7 @@
       : "";
   }
 
-  async function piloter(action, delta) {
+  async function piloter(action, delta, redirection) {
     try {
       const reponse = await fetch("/api/piloter/", {
         method: "POST",
@@ -61,7 +61,11 @@
         alert("Action refusée : " + (donnees.raison || "erreur"));
         return;
       }
-      window.location.reload();
+      if (redirection) {
+        window.location.href = redirection;
+      } else {
+        window.location.reload();
+      }
     } catch (erreur) {
       alert("Réseau indisponible.");
     }
@@ -72,7 +76,7 @@
       const delta = bouton.dataset.delta
         ? Number(bouton.dataset.delta)
         : undefined;
-      piloter(bouton.dataset.action, delta);
+      piloter(bouton.dataset.action, delta, bouton.dataset.redirection);
     });
   });
 
