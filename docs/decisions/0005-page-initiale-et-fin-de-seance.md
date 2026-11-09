@@ -38,3 +38,12 @@ Option 2 :
 - La fin de séance est explicite et ne bloque plus ni le professeur ni l'élève.
 - L'admin reste utilisable pour créer une séance ; la page initiale reste
   accessible par URL.
+
+## Mise à jour (2026-11-09, suivi PR #6)
+
+À la demande du professeur, le QR code est de nouveau affiché sur le tableau,
+uniquement pendant l'état « attente », pour que le bouton « Ouvrir » de
+l'admin montre directement le QR et le code. L'URL encodée est construite par
+`services.construire_url_rejoindre` : `QCM_LAN_HOST` (format `ip:port`) si
+défini, sinon `request.build_absolute_uri` pour la démo locale. Pendant la
+séance (en cours, pause, fin), le QR reste absent du tableau.

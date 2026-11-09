@@ -10,8 +10,10 @@ from datetime import timedelta
 
 import qrcode
 import qrcode.image.svg
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
+from django.urls import reverse
 from django.utils import timezone
 
 from qcm.couleurs import infos_couleur
@@ -271,6 +273,20 @@ def compter_reponses_par_question(session: Session, questions) -> dict[int, int]
         .annotate(nombre=Count("id"))
     )
     return {ligne["question_id"]: ligne["nombre"] for ligne in lignes}
+
+
+def construire_url_rejoindre(request, session: Session) -> str:
+    """URL absolue à encoder dans le QR code d'une séance.
+
+    ``QCM_LAN_HOST`` (format ``ip:port``) permet au téléphone de joindre le
+    serveur sur le réseau local. Sans configuration, on garde l'URL de la
+    requête, pour ne pas casser la démo locale sur l'ordinateur.
+    """
+    chemin = reverse("qcm:rejoindre", args=[session.code_session])
+    hote = (settings.QCM_LAN_HOST or "").strip()
+    if hote:
+        return f"http://{hote.rstrip('/')}{chemin}"
+    return request.build_absolute_uri(chemin)
 
 
 def generer_qr_svg(url: str) -> str:

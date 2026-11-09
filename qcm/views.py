@@ -6,7 +6,6 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from qcm import services
@@ -78,6 +77,12 @@ def tableau(request, code: str):
             ]
             nb_reponses_etape = sum(compteurs.values())
 
+    url_rejoindre = None
+    qr_svg = None
+    if session.statut == Session.STATUT_ATTENTE:
+        url_rejoindre = services.construire_url_rejoindre(request, session)
+        qr_svg = services.generer_qr_svg(url_rejoindre)
+
     contexte = {
         "session": session,
         "cartes": cartes,
@@ -86,6 +91,8 @@ def tableau(request, code: str):
         "nb_reponses": session.answers.count(),
         "nb_reponses_etape": nb_reponses_etape,
         "temps_restant_s": services.temps_restant_s(session),
+        "url_rejoindre": url_rejoindre,
+        "qr_svg": qr_svg,
     }
     return render(request, "qcm/tableau.html", contexte)
 
@@ -121,14 +128,8 @@ def session_creer(request):
 @login_required
 def session_initiale(request, code: str):
     """Page initiale d'une séance : code et QR code, uniquement ici."""
-    session = get_object_or_404(
-        Session.objects.select_related("quiz"),
-        code_session=code.strip().upper(),
-        quiz__proprietaire=request.user,
-    )
-    url_rejoindre = request.build_absolute_uri(
-        reverse("qcm:rejoindre", args=[session.code_session])
-    )
+    session = _session_prof(request, code)
+    url_rejoindre = services.construire_url_rejoindre(request, session)
     return render(
         request,
         "qcm/session_initiale.html",

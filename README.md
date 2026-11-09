@@ -67,13 +67,25 @@ python manage.py import_quiz examples/quiz_demo.json --proprietaire <utilisateur
    - Windows : `ipconfig`, ligne « Adresse IPv4 ».
 4. Depuis Safari ou Chrome sur le téléphone, ouvrir
    `http://192.168.x.x:8000/rejoindre/` en remplaçant l'adresse par celle
-   trouvée, ou scanner le QR code de la page initiale.
+   trouvée, ou scanner le QR code affiché sur la page initiale ou sur le
+   tableau en attente.
 5. Si macOS le demande, autoriser Python à recevoir des connexions entrantes
    (pare-feu).
 6. `ALLOWED_HOSTS` : avec `DEBUG=1` (défaut en démonstration), toutes les
    adresses sont acceptées. Avec `DEBUG=0`, définir
    `DJANGO_ALLOWED_HOSTS="192.168.x.x,localhost"` ; les adresses IPv4 locales
    détectées sont ajoutées automatiquement.
+7. **QR code et `QCM_LAN_HOST`** : par défaut, le QR code encode l'URL de la
+   requête (`http://127.0.0.1:8000/...`), inutilisable depuis un téléphone car
+   `127.0.0.1` désigne le téléphone lui-même. Pour que le QR code et l'URL
+   affichée sous celui-ci pointent vers le serveur, définir l'adresse LAN
+   trouvée à l'étape 3 :
+   ```bash
+   QCM_LAN_HOST=192.168.1.42:8000 python manage.py runserver 0.0.0.0:8000
+   ```
+   Le QR code encode alors `http://192.168.1.42:8000/rejoindre/<code>/`. Le
+   tableau affiche aussi le QR et le code pendant l'attente, pour que
+   « Ouvrir » depuis l'admin soit directement utilisable.
 
 Ne pas exposer ce serveur de démonstration sur Internet : il est prévu pour le
 réseau local et n'utilise pas HTTPS.

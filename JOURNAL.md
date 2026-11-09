@@ -182,3 +182,37 @@ avant/après dans `docs/screenshots/v2/`.
 - Le PIN en clair n'existe que dans le fichier produit à l'import, à
   distribuer puis supprimer ; la base ne contient que `pin_hash`.
 
+## 2026-11-09 — Suivi PR #6 : URL du QR code configurable
+
+**Objectif.** Rendre l'URL encodée dans le QR code utilisable depuis un
+téléphone (hôte LAN configurable) et afficher le QR + le code sur le tableau
+en attente, pour que « Ouvrir » depuis l'admin soit directement utilisable.
+
+**Prompt / demande.** Commentaires PR #6 : « Corrige l'URL encodée dans le QR
+code de la page initiale de session… » puis « Parfait tu peux lancer le
+correctif, fait en sorte que lorsqu'on fait "ouvrir" au niveau du tableau on
+puisse avoir directement le qr code ainsi que le code qui s'affiche. »
+
+**Réalisé.**
+
+- `config/settings.py` : `QCM_LAN_HOST` lu depuis l'environnement (vide par
+  défaut).
+- `qcm/services.py` : helper `construire_url_rejoindre(request, session)` ;
+  `http://<QCM_LAN_HOST>/rejoindre/<code>/` si défini, sinon
+  `request.build_absolute_uri`.
+- `/session/<code>/` : utilise le helper, affiche « URL encodée : … », et
+  renvoie 403 à un autre professeur (au lieu de 404).
+- Tableau en attente : QR code + code + URL encodée, le QR n'étant affiché
+  qu'avant le démarrage.
+- README section « Accès depuis un téléphone » : exemple `QCM_LAN_HOST`,
+  rappel que `127.0.0.1` désigne le téléphone lui-même.
+- Tests : sans variable, avec `192.168.1.42:8000`, variable vide, 403, et QR
+  sur le tableau en attente.
+
+**Vérifications.** `pytest` (174 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures avant/après dans `docs/screenshots/qr-lan/`.
+
+**Décision.** Le QR est réaffiché sur le tableau uniquement pendant l'attente
+(mise à jour de l'ADR 0005) ; pendant la séance, il reste absent.
+
+

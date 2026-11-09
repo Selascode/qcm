@@ -305,6 +305,29 @@ body.page-tableau {
   color: #a9b6c6;
 }
 
+.qr-tableau {
+  width: min(240px, 62vw);
+  margin: 16px auto 8px;
+  padding: 10px;
+  background: #fff;
+  border-radius: 12px;
+}
+
+.qr-tableau svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lien-session-tableau {
+  margin: 0;
+  color: #8fa0b5;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
 .liens-tableau {
   display: flex;
   flex-wrap: wrap;

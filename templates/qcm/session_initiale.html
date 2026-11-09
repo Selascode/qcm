@@ -8,10 +8,10 @@
   <p class="code-session">{{ session.code_session }}</p>
   <p class="sous-titre">
     Les élèves rejoignent avec ce code ou en scannant le QR code. Le QR code
-    n'est affiché que sur cette page.
+    est aussi affiché sur le tableau pendant l'attente.
   </p>
   <div class="qr-session">{{ qr_svg|safe }}</div>
-  <p class="lien-session">{{ url_rejoindre }}</p>
+  <p class="lien-session">URL encodée : {{ url_rejoindre }}</p>
   <div class="actions-accueil">
     <a class="bouton-principal" href="{% url 'qcm:tableau' session.code_session %}">
       Ouvrir le tableau

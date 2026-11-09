@@ -161,7 +161,7 @@ def test_piloter_exige_le_jeton_csrf(proprietaire):
     assert accepte.json()["statut"] == "en_cours"
 
 
-def test_tableau_affiche_les_questions_sans_qr(client, proprietaire):
+def test_tableau_affiche_le_qr_en_attente_puis_les_questions(client, proprietaire):
     quiz = importer_quiz(donnees_quiz(1, 1), proprietaire)
     session = creer_session(quiz)
     client.force_login(proprietaire)
@@ -170,7 +170,8 @@ def test_tableau_affiche_les_questions_sans_qr(client, proprietaire):
     contenu = attente.content.decode()
     assert attente.status_code == 200
     assert session.code_session in contenu
-    assert "<svg" not in contenu
+    assert "<svg" in contenu
+    assert "URL encodée" in contenu
     assert "Séance en attente" in contenu
     assert "Démarrer" in contenu
 
@@ -186,6 +187,7 @@ def test_tableau_affiche_les_questions_sans_qr(client, proprietaire):
     assert 'data-action="terminer"' in contenu
     assert "data-question-id" in contenu
     assert "Séance en attente" not in contenu
+    assert "<svg" not in contenu
 
     donnees = client.get(f"/api/etat_prof/?code={session.code_session}").json()
     assert donnees["ok"] is True
@@ -259,7 +261,7 @@ def test_creation_session_par_le_prof(client, proprietaire, autre_proprietaire):
 
     autre = Client()
     autre.force_login(autre_proprietaire)
-    assert autre.get(f"/session/{session.code_session}/").status_code == 404
+    assert autre.get(f"/session/{session.code_session}/").status_code == 403
     assert autre.post("/session/creer/", {"quiz": quiz.pk}).status_code == 404
 
 
@@ -275,8 +277,10 @@ def test_page_initiale_session_affiche_le_qr_et_pas_ailleurs(client, proprietair
     assert session.code_session in contenu
     assert f"/tableau/{session.code_session}/" in contenu
 
+    tableau_attente = client.get(f"/tableau/{session.code_session}/")
+    assert "<svg" in tableau_attente.content.decode()
+
     for url in (
-        f"/tableau/{session.code_session}/",
         f"/eleve/{session.code_session}/",
         f"/rejoindre/{session.code_session}/",
         "/",

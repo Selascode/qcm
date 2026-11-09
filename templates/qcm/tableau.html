@@ -90,6 +90,10 @@
         <p class="sur-titre">Séance en attente</p>
         <p class="code-geant">{{ session.code_session }}</p>
         <p>Les élèves rejoignent avec ce code.</p>
+        {% if qr_svg %}
+          <div class="qr-tableau">{{ qr_svg|safe }}</div>
+          <p class="lien-session-tableau">URL encodée : {{ url_rejoindre }}</p>
+        {% endif %}
       </div>
     {% elif session.statut == "fini" %}
       <div class="attente-tableau">
