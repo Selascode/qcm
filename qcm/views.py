@@ -127,7 +127,7 @@ def session_creer(request):
 
 @login_required
 def session_initiale(request, code: str):
-    """Page initiale d'une séance : code et QR code, uniquement ici."""
+    """Page initiale d'une séance : code, QR code et liens de la séance."""
     session = _session_prof(request, code)
     url_rejoindre = services.construire_url_rejoindre(request, session)
     return render(
