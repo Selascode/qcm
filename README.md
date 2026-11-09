@@ -4,7 +4,8 @@ Application web Django pour faire répondre une classe à un QCM projeté au
 tableau. Les élèves répondent depuis leur téléphone **sans jamais voir
 l'énoncé** ; le serveur est la seule référence temporelle.
 
-Cette branche implémente le périmètre V1 du ticket #1 :
+Cette branche implémente le périmètre V1 du ticket #1 et les corrections
+d'interface et d'usage du ticket #3 :
 
 - import JSON d'un QCM (format `docs/SPEC.md` §5) et saisie via l'admin ;
 - code de session + QR code, salon d'attente ;
@@ -16,6 +17,11 @@ Cette branche implémente le périmètre V1 du ticket #1 :
   anti-doublon `id_client` ;
 - tableau professeur protégé, compteurs de réponses en temps réel, KaTeX et
   images ;
+- création de séance via `/session/creer/`, QR code affiché uniquement sur la
+  page initiale de la séance ;
+- bouton « Terminer la séance » sur le tableau et sur le téléphone ;
+- nombre de participants connectés en temps réel dans le salon d'attente,
+  libellés français et colonne « Groupe » dans la vue Participants ;
 - tests du refus tardif, du doublon, de la reconnexion et de l'absence de
   fuite d'énoncé.
 
@@ -37,15 +43,41 @@ python manage.py import_quiz examples/quiz_demo.json --proprietaire <utilisateur
 
 ## Déroulé de démonstration
 
-1. Dans l'admin (`/admin/`), créer une **séance** en choisissant le QCM importé.
-2. Ouvrir le lien « Tableau » de la séance ; le code et le QR code s'affichent.
+1. Se connecter à l'admin (`/admin/`), puis ouvrir `/session/creer/` (ou le
+   bouton « Créer une séance » de l'accueil) et choisir le QCM importé.
+2. La page initiale affiche le code et le QR code ; cliquer sur « Ouvrir le
+   tableau ». Le QR code n'est affiché que sur cette page.
 3. Les élèves scannent le QR code (ou ouvrent `/rejoindre/` et saisissent le
    code), puis répondent.
 4. Démarrer la séance. Le tableau affiche l'étape, les questions colorées et
    les compteurs ; les téléphones n'affichent que les lettres.
 5. Couper puis relancer `runserver` au milieu de la séance : les réponses
    déjà reçues restent en base et la séance reprend à la même étape.
-6. Utiliser Pause / Reprendre / +30 s / +1 min / +2 min / Précédent / Suivant.
+6. Utiliser Pause / Reprendre / +30 s / +1 min / +2 min / Précédent / Suivant,
+   et « Terminer la séance » pour clôturer et revenir à l'accueil.
+
+## Accès depuis un téléphone (Wi-Fi local)
+
+1. Connecter le serveur et le téléphone au **même réseau Wi-Fi** (éviter un
+   réseau invité qui isole les appareils).
+2. Lancer le serveur sur toutes les interfaces :
+   `python manage.py runserver 0.0.0.0:8000`.
+3. Trouver l'adresse IP locale du serveur :
+   - macOS : `ipconfig getifaddr en0` (ou `en1` selon l'interface) ;
+   - Linux : `hostname -I` ;
+   - Windows : `ipconfig`, ligne « Adresse IPv4 ».
+4. Depuis Safari ou Chrome sur le téléphone, ouvrir
+   `http://192.168.x.x:8000/rejoindre/` en remplaçant l'adresse par celle
+   trouvée, ou scanner le QR code de la page initiale.
+5. Si macOS le demande, autoriser Python à recevoir des connexions entrantes
+   (pare-feu).
+6. `ALLOWED_HOSTS` : avec `DEBUG=1` (défaut en démonstration), toutes les
+   adresses sont acceptées. Avec `DEBUG=0`, définir
+   `DJANGO_ALLOWED_HOSTS="192.168.x.x,localhost"` ; les adresses IPv4 locales
+   détectées sont ajoutées automatiquement.
+
+Ne pas exposer ce serveur de démonstration sur Internet : il est prévu pour le
+réseau local et n'utilise pas HTTPS.
 
 Pour un accès depuis les téléphones du réseau local, lancer
 `python manage.py runserver 0.0.0.0:8000` et ouvrir l'URL IP du serveur.

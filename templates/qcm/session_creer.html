@@ -1,0 +1,32 @@
+{% extends "qcm/base.html" %}
+{% block title %}Créer une séance — QCM en direct{% endblock %}
+{% block body_class %}page-accueil{% endblock %}
+{% block content %}
+<main class="carte">
+  <p class="sur-titre">Espace professeur</p>
+  <h1>Créer une séance</h1>
+  {% if quizzes %}
+    <p class="sous-titre">
+      Choisissez le QCM à projeter. Le code de session et le QR code seront
+      affichés sur la page suivante.
+    </p>
+    <form method="post" class="form-code">
+      {% csrf_token %}
+      <label for="quiz">QCM</label>
+      <select id="quiz" name="quiz" required>
+        {% for quiz in quizzes %}
+          <option value="{{ quiz.pk }}">{{ quiz.titre }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="bouton-principal">Créer la séance</button>
+    </form>
+  {% else %}
+    <p class="sous-titre">
+      Aucun QCM n'est disponible pour votre compte. Importez un QCM ou créez-le
+      dans l'administrateur avant de lancer une séance.
+    </p>
+    <a class="bouton-principal" href="/admin/">Ouvrir l'administrateur</a>
+  {% endif %}
+  <p class="retour-accueil"><a href="{% url 'qcm:accueil' %}">Retour à l'accueil</a></p>
+</main>
+{% endblock %}

@@ -103,6 +103,16 @@ body.page-tableau {
   color: #fff;
 }
 
+.controles .danger {
+  background: #5c1f1f;
+  border-color: #8d3333;
+  color: #ffe8e8;
+}
+
+.controles .danger:hover {
+  background: #712727;
+}
+
 .groupe-temps {
   display: inline-flex;
   gap: 4px;
@@ -231,29 +241,6 @@ body.page-tableau {
   border-radius: 16px;
 }
 
-.qr svg {
-  display: block;
-  width: 100%;
-  height: auto;
-  background: #fff;
-  padding: 10px;
-  border-radius: 12px;
-}
-
-.lien-rejoindre {
-  margin: 0;
-  color: #8fa0b5;
-  font-family: ui-monospace, monospace;
-  font-size: 0.74rem;
-  line-height: 1.35;
-  word-break: break-all;
-}
-
-.compteurs {
-  border-top: 1px solid #29313c;
-  padding-top: 10px;
-}
-
 .compteurs p {
   margin: 4px 0;
   color: #d9e2ee;
@@ -263,6 +250,34 @@ body.page-tableau {
 .compteurs strong {
   color: #ffd166;
   font-size: 1.7rem;
+}
+
+.attente-tableau .compteur-attente {
+  margin-top: 18px;
+  font-size: 1.25rem;
+  color: #d9e2ee;
+}
+
+.compteur-attente strong {
+  color: #ffd166;
+  font-size: 2.2rem;
+}
+
+.lien-fin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 22px;
+  padding: 12px 22px;
+  border-radius: 10px;
+  background: #1f6feb;
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.lien-fin:hover {
+  background: #2b7df0;
 }
 
 .attente-tableau {
@@ -314,12 +329,7 @@ body.page-tableau {
     flex-wrap: wrap;
   }
 
-  .qr {
-    width: 150px;
-  }
-
   .compteurs {
-    border-top: 0;
     border-left: 1px solid #29313c;
     padding: 0 0 0 14px;
   }

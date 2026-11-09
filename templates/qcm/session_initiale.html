@@ -1,0 +1,24 @@
+{% extends "qcm/base.html" %}
+{% block title %}Séance {{ session.code_session }} — QCM en direct{% endblock %}
+{% block body_class %}page-accueil{% endblock %}
+{% block content %}
+<main class="carte carte-session">
+  <p class="sur-titre">Séance créée</p>
+  <h1>{{ session.quiz.titre }}</h1>
+  <p class="code-session">{{ session.code_session }}</p>
+  <p class="sous-titre">
+    Les élèves rejoignent avec ce code ou en scannant le QR code. Le QR code
+    n'est affiché que sur cette page.
+  </p>
+  <div class="qr-session">{{ qr_svg|safe }}</div>
+  <p class="lien-session">{{ url_rejoindre }}</p>
+  <div class="actions-accueil">
+    <a class="bouton-principal" href="{% url 'qcm:tableau' session.code_session %}">
+      Ouvrir le tableau
+    </a>
+    <a class="bouton-secondaire" href="{% url 'qcm:session_creer' %}">
+      Créer une autre séance
+    </a>
+  </div>
+</main>
+{% endblock %}

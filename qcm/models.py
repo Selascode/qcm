@@ -37,27 +37,43 @@ def tirer_graine() -> int:
 
 
 class Quiz(models.Model):
-    titre = models.CharField(max_length=200)
+    titre = models.CharField("Titre", max_length=200)
     proprietaire = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="quiz",
+        verbose_name="Propriétaire",
     )
 
     class Meta:
         ordering = ("titre",)
+        verbose_name = "QCM"
+        verbose_name_plural = "QCM"
 
     def __str__(self) -> str:
         return self.titre
 
 
 class Step(models.Model):
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="steps")
-    numero = models.PositiveSmallIntegerField(validators=[MinValueValidator(1)])
-    duree_s = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    quiz = models.ForeignKey(
+        Quiz,
+        on_delete=models.CASCADE,
+        related_name="steps",
+        verbose_name="QCM",
+    )
+    numero = models.PositiveSmallIntegerField(
+        "Numéro",
+        validators=[MinValueValidator(1)],
+    )
+    duree_s = models.PositiveIntegerField(
+        "Durée (s)",
+        validators=[MinValueValidator(1)],
+    )
 
     class Meta:
         ordering = ("numero",)
+        verbose_name = "Étape"
+        verbose_name_plural = "Étapes"
         constraints = (
             models.UniqueConstraint(
                 fields=["quiz", "numero"],
@@ -84,24 +100,42 @@ class Question(models.Model):
         on_delete=models.CASCADE,
         related_name="questions",
         editable=False,
+        verbose_name="QCM",
     )
-    step = models.ForeignKey(Step, on_delete=models.CASCADE, related_name="questions")
-    uid = models.CharField(max_length=64)
-    enonce = models.TextField()
-    image = models.FileField(upload_to="questions/", blank=True)
-    type = models.CharField(max_length=10, choices=TYPES, default=TYPE_UNIQUE)
-    afficher_indice_multiple = models.BooleanField(default=False)
+    step = models.ForeignKey(
+        Step,
+        on_delete=models.CASCADE,
+        related_name="questions",
+        verbose_name="Étape",
+    )
+    uid = models.CharField("Identifiant", max_length=64)
+    enonce = models.TextField("Énoncé")
+    image = models.FileField("Image", upload_to="questions/", blank=True)
+    type = models.CharField(
+        "Type",
+        max_length=10,
+        choices=TYPES,
+        default=TYPE_UNIQUE,
+    )
+    afficher_indice_multiple = models.BooleanField(
+        "Afficher l'indice choix multiple",
+        default=False,
+    )
     ordre = models.PositiveSmallIntegerField(
+        "Ordre",
         validators=[MinValueValidator(1)],
         default=1,
     )
     couleur_slot = models.PositiveSmallIntegerField(
+        "Emplacement couleur",
         validators=[MinValueValidator(1), MaxValueValidator(NB_COULEURS)],
         default=1,
     )
 
     class Meta:
         ordering = ("ordre",)
+        verbose_name = "Question"
+        verbose_name_plural = "Questions"
         constraints = (
             models.UniqueConstraint(
                 fields=["quiz", "uid"],
@@ -148,14 +182,17 @@ class Choice(models.Model):
         Question,
         on_delete=models.CASCADE,
         related_name="choices",
+        verbose_name="Question",
     )
-    lettre = models.CharField(max_length=1)
-    texte = models.TextField()
-    est_correct = models.BooleanField(default=False)
-    position = models.PositiveSmallIntegerField(default=0)
+    lettre = models.CharField("Lettre", max_length=1)
+    texte = models.TextField("Texte")
+    est_correct = models.BooleanField("Correcte", default=False)
+    position = models.PositiveSmallIntegerField("Position", default=0)
 
     class Meta:
         ordering = ("position",)
+        verbose_name = "Choix"
+        verbose_name_plural = "Choix"
         constraints = (
             models.UniqueConstraint(
                 fields=["question", "lettre"],
@@ -179,19 +216,36 @@ class Session(models.Model):
         (STATUT_FINI, "Terminée"),
     )
 
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="sessions")
-    code_session = models.CharField(max_length=8, unique=True, editable=False)
+    quiz = models.ForeignKey(
+        Quiz,
+        on_delete=models.CASCADE,
+        related_name="sessions",
+        verbose_name="QCM",
+    )
+    code_session = models.CharField(
+        "Code de session",
+        max_length=8,
+        unique=True,
+        editable=False,
+    )
     statut = models.CharField(
+        "Statut",
         max_length=10,
         choices=STATUTS,
         default=STATUT_ATTENTE,
     )
-    etape_courante = models.PositiveIntegerField(default=0)
-    ends_at = models.DateTimeField(null=True, blank=True)
-    reste_en_pause = models.PositiveIntegerField(null=True, blank=True)
+    etape_courante = models.PositiveIntegerField("Étape courante", default=0)
+    ends_at = models.DateTimeField("Fin de l'étape", null=True, blank=True)
+    reste_en_pause = models.PositiveIntegerField(
+        "Reste en pause (s)",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         ordering = ("-id",)
+        verbose_name = "Séance"
+        verbose_name_plural = "Séances"
 
     def save(self, *args, **kwargs) -> None:
         if not self.code_session:
@@ -215,16 +269,28 @@ class Participant(models.Model):
         Session,
         on_delete=models.CASCADE,
         related_name="participants",
+        verbose_name="Séance",
     )
-    jeton_appareil = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    jeton_appareil = models.UUIDField(
+        "Jeton de l'appareil",
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+    )
     couleur_assignee = models.PositiveSmallIntegerField(
+        "Couleur assignée",
         validators=[MinValueValidator(1), MaxValueValidator(NB_COULEURS)],
         default=tirer_couleur,
     )
-    graine_melange = models.PositiveBigIntegerField(default=tirer_graine)
+    graine_melange = models.PositiveBigIntegerField(
+        "Graine de mélange",
+        default=tirer_graine,
+    )
 
     class Meta:
         ordering = ("id",)
+        verbose_name = "Élève"
+        verbose_name_plural = "Élèves"
 
     @property
     def symbole(self) -> str:
@@ -246,27 +312,33 @@ class Answer(models.Model):
         Session,
         on_delete=models.CASCADE,
         related_name="answers",
+        verbose_name="Séance",
     )
     participant = models.ForeignKey(
         Participant,
         on_delete=models.CASCADE,
         related_name="answers",
+        verbose_name="Élève",
     )
     question = models.ForeignKey(
         Question,
         on_delete=models.CASCADE,
         related_name="answers",
+        verbose_name="Question",
     )
-    choix_selectionnes = models.JSONField(default=list)
-    recu_a = models.DateTimeField(auto_now_add=True)
+    choix_selectionnes = models.JSONField("Choix sélectionnés", default=list)
+    recu_a = models.DateTimeField("Reçu à", auto_now_add=True)
     source = models.CharField(
+        "Source",
         max_length=10,
         choices=SOURCES,
         default=SOURCE_APP,
     )
-    id_client = models.UUIDField(unique=True)
+    id_client = models.UUIDField("Identifiant client", unique=True)
 
     class Meta:
+        verbose_name = "Réponse"
+        verbose_name_plural = "Réponses"
         constraints = (
             models.UniqueConstraint(
                 fields=["participant", "question"],

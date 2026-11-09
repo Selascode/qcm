@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from qcm.import_json import importer_quiz
-from qcm.models import Session
+from qcm.models import Participant, Session
 from qcm.tests.helpers import donnees_quiz
 
 pytestmark = pytest.mark.django_db
@@ -38,3 +38,22 @@ def test_admin_cree_une_session_avec_code_et_lien_tableau(client):
     liste = client.get("/admin/qcm/session/")
     assert liste.status_code == 200
     assert f"/tableau/{session.code_session}/" in liste.content.decode()
+
+
+def test_admin_participants_affiche_la_colonne_groupe(client):
+    administrateur = get_user_model().objects.create_superuser(
+        username="admin-groupe",
+        email="admin-groupe@example.com",
+        password="secret",
+    )
+    quiz = importer_quiz(donnees_quiz(1, 1), administrateur)
+    session = Session.objects.create(quiz=quiz)
+    Participant.objects.create(session=session)
+    client.force_login(administrateur)
+
+    liste = client.get("/admin/qcm/participant/")
+
+    assert liste.status_code == 200
+    contenu = liste.content.decode()
+    assert "Groupe" in contenu
+    assert "—" in contenu

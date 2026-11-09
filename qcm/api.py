@@ -344,6 +344,8 @@ def piloter(request):
             session = services.etape_suivante(session)
         elif action == "precedent":
             session = services.etape_precedente(session)
+        elif action == "terminer":
+            session = services.terminer_session(session)
         else:
             return _erreur("action_inconnue")
     except services.ErreurPilotage as exc:

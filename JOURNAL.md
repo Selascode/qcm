@@ -60,3 +60,48 @@ redémarré, « Votre réponse a bien été reçue. » et file vidée.
   l'issue disent 1 à 4 ; l'implémentation suit 1 à 4. À corriger dans une PR
   doc dédiée (SPEC non modifiée ici).
 - Le tag Git `v1.0` est à créer après fusion.
+
+## 2026-11-09 — Dette V1 : corrections d'interface et d'usage
+
+**Objectif.** Traiter les 6 points du ticket #3 : fin de séance, accès iPhone
+sur le Wi-Fi local, compteur du salon d'attente, QR uniquement sur la page
+initiale, libellés français, colonne Groupe.
+
+**Prompt / demande.** Issue #3 « Dette V1 : corrections d'interface et
+d'usage » ; plan de 6 lignes publié (comment `6737768399`) et validé par
+« Je valides tu peux lancer l'implémentation » (comment `6737809734`).
+
+**Réalisé.**
+
+- `terminer_session` + action `terminer` ; bouton « Terminer la séance » sur le
+  tableau (retour à l'accueil) et sur l'écran final du téléphone ; lien de
+  sortie sur les pages finales.
+- `ALLOWED_HOSTS` : IPv4 locales détectées hors DEBUG ; section README « Accès
+  depuis un téléphone » (même Wi-Fi, `runserver 0.0.0.0:8000`, URL IP, pare-feu).
+- Compteur du nombre d'élèves connectés dans la zone d'attente du tableau,
+  rafraîchi par le polling 1–2 s existant.
+- Routes `/session/creer/` et `/session/<code>/` ; QR code déplacé sur cette
+  page initiale, retiré du tableau ; lien « Créer une séance » sur l'accueil.
+- `verbose_name`/`verbose_name_plural` français et test rendant les pages
+  publiques et l'admin ; migration `0002_libelles_francais` limitée à
+  `AlterModelOptions` et `AlterField`, sans SQL.
+- Colonne « Groupe » (« — ») + TODO V2 dans l'admin Participants.
+
+**Vérifications.** `pytest` (103 tests), `ruff check .`,
+`manage.py check`, `makemigrations --check` ; captures avant/après dans la PR.
+
+**Problèmes rencontrés / décisions.**
+
+- La route `/session/creer/` n'existait pas : elle est ajoutée pour respecter
+  « QR uniquement sur la page initiale » (ADR 0005).
+- Le ticket interdit les migrations : seule une migration de métadonnées
+  (`AlterModelOptions` et `AlterField`) a été générée pour les libellés, sans
+  aucune opération de schéma ni changement de table.
+- L'admin crée toujours des séances, mais le QR n'est accessible que via la
+  page initiale `/session/<code>/` (lien documenté dans le README).
+
+**Reste à faire.**
+
+- Revue humaine et fusion manuelle (aucun auto-merge).
+- Les cases V1 restantes de la ROADMAP et le tag `v1.0` restent à traiter
+  après fusion.

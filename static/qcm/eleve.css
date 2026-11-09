@@ -150,6 +150,11 @@ body.page-eleve {
   margin-bottom: 0.5rem;
 }
 
+.attente-eleve .bouton-principal {
+  width: 100%;
+  margin-top: 18px;
+}
+
 .note-bas {
   margin-top: auto;
   color: #8a7a5f;

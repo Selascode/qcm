@@ -7,6 +7,9 @@
   const elEtape = document.getElementById("etape");
   const elReponses = document.getElementById("nb-reponses");
   const elParticipants = document.getElementById("nb-participants");
+  const elParticipantsAttente = document.getElementById(
+    "nb-participants-attente"
+  );
   let secondes = typeof config.temps === "number" ? config.temps : null;
   let interval = null;
   let etape = config.etape;
@@ -46,7 +49,7 @@
       : "";
   }
 
-  async function piloter(action, delta) {
+  async function piloter(action, delta, redirection) {
     try {
       const reponse = await fetch("/api/piloter/", {
         method: "POST",
@@ -61,7 +64,11 @@
         alert("Action refusée : " + (donnees.raison || "erreur"));
         return;
       }
-      window.location.reload();
+      if (redirection) {
+        window.location.href = redirection;
+      } else {
+        window.location.reload();
+      }
     } catch (erreur) {
       alert("Réseau indisponible.");
     }
@@ -72,7 +79,7 @@
       const delta = bouton.dataset.delta
         ? Number(bouton.dataset.delta)
         : undefined;
-      piloter(bouton.dataset.action, delta);
+      piloter(bouton.dataset.action, delta, bouton.dataset.redirection);
     });
   });
 
@@ -91,6 +98,9 @@
       if (elReponses) elReponses.textContent = donnees.nb_reponses_etape;
       if (elParticipants) {
         elParticipants.textContent = donnees.nb_participants;
+      }
+      if (elParticipantsAttente) {
+        elParticipantsAttente.textContent = donnees.nb_participants;
       }
       for (const question of donnees.questions) {
         const compteur = document.querySelector(

@@ -1,6 +1,7 @@
 """Configuration Django du projet QCM en direct (V1)."""
 
 import os
+import socket
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -9,16 +10,46 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-seulement-a-changer")
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
+
+def _hotes_locaux() -> list[str]:
+    """Noms et adresses IPv4 du serveur, pour l'accès téléphone en Wi-Fi local."""
+    hotes = {"localhost", "127.0.0.1", "[::1]"}
+    try:
+        # Un connect() UDP n'envoie aucun paquet : il révèle l'IP de l'interface
+        # qui porte la route par défaut, c'est-à-dire l'IP LAN du serveur.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sonde:
+            sonde.connect(("8.8.8.8", 80))
+            hotes.add(sonde.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        nom = socket.gethostname()
+        if nom:
+            hotes.add(nom)
+            for info in socket.getaddrinfo(nom, None):
+                adresse = info[4][0]
+                if ":" not in adresse:
+                    hotes.add(adresse)
+    except OSError:
+        pass
+    return sorted(hotes)
+
+
 # En développement/démo, on accepte les accès depuis le réseau local (téléphones).
-# En production, définir DJANGO_ALLOWED_HOSTS avec le nom de domaine de l'école.
+# Hors DEBUG, DJANGO_ALLOWED_HOSTS (liste séparée par des virgules) est complété
+# par les adresses locales détectées, pour que l'iPhone puisse joindre le serveur
+# sur le Wi-Fi sans configuration supplémentaire.
 if DEBUG:
     ALLOWED_HOSTS = ["*"]
 else:
-    ALLOWED_HOSTS = [
-        h.strip()
-        for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
-        if h.strip()
-    ]
+    ALLOWED_HOSTS = sorted(
+        {
+            h.strip()
+            for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+            if h.strip()
+        }
+        | set(_hotes_locaux())
+    )
 
 INSTALLED_APPS = [
     "django.contrib.admin",

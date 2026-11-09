@@ -129,12 +129,18 @@ class ParticipantAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "session",
+        "groupe",
         "couleur_assignee",
         "symbole",
         "graine_melange",
     )
     list_filter = ("session",)
     search_fields = ("session__code_session",)
+
+    @admin.display(description="Groupe")
+    def groupe(self, obj: Participant) -> str:
+        # TODO(V2) : retourner le groupe de l'élève quand le modèle Groupe existera.
+        return "—"
 
     def has_add_permission(self, request) -> bool:
         return False
