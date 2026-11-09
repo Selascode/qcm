@@ -206,7 +206,10 @@ def test_tableau_attente_affiche_le_nombre_de_participants(client, proprietaire)
 
     contenu = client.get(f"/tableau/{session.code_session}/").content.decode()
 
-    assert 'id="nb-participants-attente">3<' in contenu
+    assert 'class="pied-tableau"' in contenu
+    assert 'id="nb-participants">3<' in contenu
+    assert 'class="panneau"' not in contenu
+    assert 'id="nb-participants-attente"' not in contenu
     donnees = client.get(f"/api/etat_prof/?code={session.code_session}").json()
     assert donnees["nb_participants"] == 3
 

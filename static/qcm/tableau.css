@@ -12,8 +12,8 @@ body.page-tableau {
   margin: 0 auto;
   padding: 18px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 310px;
-  grid-template-rows: auto 1fr;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
   gap: 16px;
 }
 
@@ -228,39 +228,27 @@ body.page-tableau {
   min-width: 0;
 }
 
-.panneau {
-  align-self: start;
-  position: sticky;
-  top: 18px;
+.pied-tableau {
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: #151a21;
-  border: 1px solid #29313c;
-  border-radius: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 2px 6px 10px;
+  color: #6f7d8d;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
 }
 
-.compteurs p {
-  margin: 4px 0;
-  color: #d9e2ee;
-  font-size: 1rem;
+.pied-tableau strong {
+  color: #8fa0b5;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
-.compteurs strong {
-  color: #ffd166;
-  font-size: 1.7rem;
-}
-
-.attente-tableau .compteur-attente {
-  margin-top: 18px;
-  font-size: 1.25rem;
-  color: #d9e2ee;
-}
-
-.compteur-attente strong {
-  color: #ffd166;
-  font-size: 2.2rem;
+.pied-separateur {
+  color: #43505f;
 }
 
 .lien-fin {
@@ -315,22 +303,4 @@ body.page-tableau {
 
 .aucune-question {
   color: #a9b6c6;
-}
-
-@media (max-width: 1100px) {
-  .tableau-app {
-    grid-template-columns: 1fr;
-  }
-
-  .panneau {
-    position: static;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  .compteurs {
-    border-left: 1px solid #29313c;
-    padding: 0 0 0 14px;
-  }
 }

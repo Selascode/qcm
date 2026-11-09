@@ -15,13 +15,12 @@ d'interface et d'usage du ticket #3 :
   +temps / suivant / précédent ;
 - polling `/api/etat/` toutes les 1 à 2 s, file locale `localStorage` et
   anti-doublon `id_client` ;
-- tableau professeur protégé, compteurs de réponses en temps réel, KaTeX et
-  images ;
+- tableau professeur protégé, questions en pleine largeur, compteurs de
+  réponses et de participants discrets en pied de page, KaTeX et images ;
 - création de séance via `/session/creer/`, QR code affiché uniquement sur la
   page initiale de la séance ;
 - bouton « Terminer la séance » sur le tableau et sur le téléphone ;
-- nombre de participants connectés en temps réel dans le salon d'attente,
-  libellés français et colonne « Groupe » dans la vue Participants ;
+- libellés français et colonne « Groupe » dans la vue Participants ;
 - tests du refus tardif, du doublon, de la reconnexion et de l'absence de
   fuite d'énoncé.
 

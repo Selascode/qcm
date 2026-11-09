@@ -7,9 +7,6 @@
   const elEtape = document.getElementById("etape");
   const elReponses = document.getElementById("nb-reponses");
   const elParticipants = document.getElementById("nb-participants");
-  const elParticipantsAttente = document.getElementById(
-    "nb-participants-attente"
-  );
   let secondes = typeof config.temps === "number" ? config.temps : null;
   let interval = null;
   let etape = config.etape;
@@ -98,9 +95,6 @@
       if (elReponses) elReponses.textContent = donnees.nb_reponses_etape;
       if (elParticipants) {
         elParticipants.textContent = donnees.nb_participants;
-      }
-      if (elParticipantsAttente) {
-        elParticipantsAttente.textContent = donnees.nb_participants;
       }
       for (const question of donnees.questions) {
         const compteur = document.querySelector(

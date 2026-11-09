@@ -105,3 +105,26 @@ d'usage » ; plan de 6 lignes publié (comment `6737768399`) et validé par
 - Revue humaine et fusion manuelle (aucun auto-merge).
 - Les cases V1 restantes de la ROADMAP et le tag `v1.0` restent à traiter
   après fusion.
+
+## 2026-11-09 — Suivi de la PR #4 : tableau en pleine largeur
+
+**Objectif.** Répondre à la revue : retirer la barre de droite du tableau pour
+que les questions occupent toute la largeur, et rendre les compteurs de
+réponses / participants discrets en pied de page.
+
+**Réalisé.**
+
+- Suppression de l'aside et de la colonne de 310 px ; `.tableau-app` passe à
+  une colonne avec une ligne de pied de page.
+- Compteurs déplacés dans un `pied-tableau` discret (petite police, centré en
+  bas) ; compteur redondant du salon d'attente retiré ; JS mis à jour.
+- Test du tableau adapté (plus d'aside, pied de page, aucun
+  `nb-participants-attente`).
+- Captures avant/après ajoutées dans `docs/screenshots/dette-v1/`.
+
+**Vérifications.** `pytest` (103 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`.
+
+**Décision.** La demande humaine la plus récente prime sur la mise en avant du
+compteur de salon d'attente : le compteur reste visible et rafraîchi, mais
+discret en pied de page.
