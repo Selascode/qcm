@@ -1,0 +1,133 @@
+{
+  "titre": "CM 3 — Démo V1",
+  "questions": [
+    {
+      "uid": "Q1",
+      "etape": 1,
+      "duree_s": 90,
+      "enonce": "Quelle est la complexité de la recherche dichotomique dans un tableau trié ?",
+      "type": "unique",
+      "choix": [
+        {"lettre": "A", "texte": "O(n)", "correct": false},
+        {"lettre": "B", "texte": "O(log n)", "correct": true},
+        {"lettre": "C", "texte": "O(n log n)", "correct": false},
+        {"lettre": "D", "texte": "O(1)", "correct": false}
+      ]
+    },
+    {
+      "uid": "Q2",
+      "etape": 1,
+      "duree_s": 90,
+      "enonce": "Quelle condition est indispensable pour appliquer la recherche dichotomique ?",
+      "type": "unique",
+      "choix": [
+        {"lettre": "A", "texte": "Le tableau doit être trié", "correct": true},
+        {"lettre": "B", "texte": "Le tableau doit être vide", "correct": false},
+        {"lettre": "C", "texte": "Le tableau doit être une liste chaînée", "correct": false},
+        {"lettre": "D", "texte": "Le tableau doit contenir des chaînes", "correct": false}
+      ]
+    },
+    {
+      "uid": "Q3",
+      "etape": 2,
+      "duree_s": 60,
+      "enonce": "Que vaut $\\sum_{i=1}^{n} i$ ?",
+      "type": "unique",
+      "choix": [
+        {"lettre": "A", "texte": "$n^2$", "correct": false},
+        {"lettre": "B", "texte": "$\\frac{n(n+1)}{2}$", "correct": true},
+        {"lettre": "C", "texte": "$n(n-1)$", "correct": false},
+        {"lettre": "D", "texte": "$2n$", "correct": false}
+      ]
+    },
+    {
+      "uid": "Q4",
+      "etape": 3,
+      "duree_s": 120,
+      "enonce": "En Python, que vaut `len([1, 2, 3])` ?",
+      "type": "unique",
+      "choix": [
+        {"lettre": "A", "texte": "2", "correct": false},
+        {"lettre": "B", "texte": "3", "correct": true},
+        {"lettre": "C", "texte": "4", "correct": false}
+      ]
+    },
+    {
+      "uid": "Q5",
+      "etape": 3,
+      "duree_s": 120,
+      "enonce": "En SQL, quelle clause filtre les lignes d'un résultat ?",
+      "type": "unique",
+      "choix": [
+        {"lettre": "A", "texte": "ORDER BY", "correct": false},
+        {"lettre": "B", "texte": "GROUP BY", "correct": false},
+        {"lettre": "C", "texte": "WHERE", "correct": true},
+        {"lettre": "D", "texte": "LIMIT", "correct": false}
+      ]
+    },
+    {
+      "uid": "Q6",
+      "etape": 3,
+      "duree_s": 120,
+      "enonce": "Que signifie le sigle HTTP ?",
+      "type": "unique",
+      "choix": [
+        {"lettre": "A", "texte": "HyperText Transfer Protocol", "correct": true},
+        {"lettre": "B", "texte": "High Transfer Text Process", "correct": false},
+        {"lettre": "C", "texte": "HyperText Transmission Program", "correct": false}
+      ]
+    },
+    {
+      "uid": "Q7",
+      "etape": 3,
+      "duree_s": 120,
+      "enonce": "Quelle structure de données fonctionne en LIFO ?",
+      "type": "unique",
+      "choix": [
+        {"lettre": "A", "texte": "File", "correct": false},
+        {"lettre": "B", "texte": "Pile", "correct": true},
+        {"lettre": "C", "texte": "Arbre binaire", "correct": false},
+        {"lettre": "D", "texte": "Table de hachage", "correct": false}
+      ]
+    },
+    {
+      "uid": "Q8",
+      "etape": 4,
+      "duree_s": 60,
+      "enonce": "Que vaut $\\int_0^1 x^2\\,dx$ ?",
+      "type": "unique",
+      "choix": [
+        {"lettre": "A", "texte": "$\\frac{1}{2}$", "correct": false},
+        {"lettre": "B", "texte": "$\\frac{1}{3}$", "correct": true},
+        {"lettre": "C", "texte": "$1$", "correct": false},
+        {"lettre": "D", "texte": "$\\frac{2}{3}$", "correct": false}
+      ]
+    },
+    {
+      "uid": "Q9",
+      "etape": 5,
+      "duree_s": 90,
+      "enonce": "Lesquels de ces nombres sont premiers ?",
+      "type": "multiple",
+      "choix": [
+        {"lettre": "A", "texte": "2", "correct": true},
+        {"lettre": "B", "texte": "3", "correct": true},
+        {"lettre": "C", "texte": "4", "correct": false},
+        {"lettre": "D", "texte": "9", "correct": false}
+      ]
+    },
+    {
+      "uid": "Q10",
+      "etape": 5,
+      "duree_s": 90,
+      "enonce": "Lesquels de ces langages sont interprétés ?",
+      "type": "multiple",
+      "choix": [
+        {"lettre": "A", "texte": "Python", "correct": true},
+        {"lettre": "B", "texte": "C", "correct": false},
+        {"lettre": "C", "texte": "JavaScript", "correct": true},
+        {"lettre": "D", "texte": "Rust", "correct": false}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{% extends "qcm/base.html" %}
+{% load static %}
+{% block title %}Ma réponse — QCM en direct{% endblock %}
+{% block body_class %}page-eleve{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'qcm/eleve.css' %}">
+{% endblock %}
+{% block content %}
+<main id="app" class="eleve-app" data-code="{{ session.code_session|escapejs }}">
+  <header class="eleve-entete">
+    <div>
+      <p class="sur-titre">QCM en direct</p>
+      <p class="code-session">{{ session.code_session }}</p>
+    </div>
+    <div class="entete-droite">
+      <p id="statut" class="statut" role="status">Connexion…</p>
+      <p id="minuteur" class="minuteur">--:--</p>
+    </div>
+  </header>
+
+  <section id="attente" class="attente-eleve" hidden>
+    <p class="attente-titre">En attente du professeur</p>
+    <p>La séance va bientôt démarrer. Gardez cette page ouverte.</p>
+  </section>
+
+  <section id="fini" class="attente-eleve" hidden>
+    <p class="attente-titre">Séance terminée</p>
+    <p>Merci, vos réponses sont enregistrées.</p>
+  </section>
+
+  <section id="question" class="question-eleve" hidden>
+    <div id="badge-couleur" class="badge-couleur">
+      <span id="symbole" class="symbole"></span>
+      <span id="nom-couleur"></span>
+    </div>
+    <p class="consigne">Répondez à la question de cette couleur au tableau.</p>
+    <div id="boutons" class="boutons"></div>
+    <button id="valider" type="button" class="valider" disabled>Valider</button>
+    <p id="message" class="message" role="status"></p>
+  </section>
+
+  <p class="note-bas">
+    Une réponse est définitive. « Réponse validée » n'apparaît qu'après
+    l'accusé de réception du serveur.
+  </p>
+</main>
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'qcm/eleve.js' %}"></script>
+{% endblock %}

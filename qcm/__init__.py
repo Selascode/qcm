@@ -1,0 +1,1 @@
+"""Application QCM en direct."""

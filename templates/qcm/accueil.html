@@ -1,0 +1,19 @@
+{% extends "qcm/base.html" %}
+{% block title %}QCM en direct{% endblock %}
+{% block body_class %}page-accueil{% endblock %}
+{% block content %}
+<main class="carte-accueil">
+  <p class="sur-titre">PAO INSA Rouen</p>
+  <h1>QCM en direct</h1>
+  <p class="sous-titre">
+    Le professeur projette les questions au tableau ; les élèves répondent
+    depuis leur téléphone, sans jamais voir l'énoncé.
+  </p>
+  <div class="actions-accueil">
+    <a class="bouton-principal" href="{% url 'qcm:rejoindre_saisie' %}">
+      Rejoindre une séance
+    </a>
+    <a class="bouton-secondaire" href="/admin/">Espace professeur</a>
+  </div>
+</main>
+{% endblock %}
