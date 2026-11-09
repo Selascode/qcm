@@ -247,8 +247,8 @@ Les statistiques de classe au tableau en fin d'étape sont une option ultérieur
 | Version | Contenu | Terminé quand |
 | :--- | :--- | :--- |
 | **V0** (démo) | QCM codé en dur, écran prof/tableau, écran élève, minuteur serveur, récupération réponse | 3 téléphones rejoignent et répondent, réponse tardive refusée |
-| **V1** (cœur) | Admin Django, import JSON, QR + code session, 1 à 5 questions colorées, pause/+temps/suivant/précédent, reconnexion, file locale, KaTeX, images | Séance de 5 étapes avec redémarrage serveur au milieu, sans perte |
-| **V2** (comptes et notes) | Import CSV élèves, identifiant + PIN, un appareil actif, notation, résultats, accessibilité | Notes couvertes par tests, taux de réussite exact |
+| **V1** (cœur) | Admin Django, import JSON, QR + code session, 1 à 4 questions colorées, pause/+temps/suivant/précédent, reconnexion, file locale, KaTeX, images | Séance de 5 étapes avec redémarrage serveur au milieu, sans perte |
+| **V2** (comptes et notes) | Import CSV,JSON, PDF élèves, identifiant + PIN, un appareil actif, notation, résultats, accessibilité | Notes couvertes par tests, taux de réussite exact |
 | **V3** (papier et exports) | PDF par élève, saisie manuelle papier, fusion, exports CSV/PDF, stats élèves | Feuille papier + séance appli fusionnent sans doublon |
 | **V4** (finitions) | Stats au tableau, serveur local, test de charge 100 clients, purge, doc finale | Test de charge sans erreur, guide remis |
 

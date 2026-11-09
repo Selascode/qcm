@@ -64,9 +64,12 @@ Objectif : une séance complète, avec redémarrage serveur au milieu, sans pert
 
 ### Élèves
 - [ ] Import CSV de la liste de classe (nom, prénom)
+- [ ] Import PDF de la liste de classe (nom, prénom)
+- [ ] Import JSON de la liste de classe (nom, prénom)
 - [ ] Génération identifiant + PIN, hash du PIN
 - [ ] Liste imprimable pour la distribution
 - [ ] Un seul appareil actif par élève (nouvelle connexion remplace l'ancienne)
+- [ ] Un affichage sur le tableau professeur de la liste de participants / Leur identifiant de connexion associé
 - [ ] Le prof voit qui est connecté et peut réinitialiser l'appareil d'un élève
 
 ### Notation
@@ -134,7 +137,7 @@ Objectif : une séance complète, avec redémarrage serveur au milieu, sans pert
 | Format JSON d'import définitif | V1 | À figer avant l'import |
 | Tolérance de latence sur les réponses proches de la fin | V1 | À trancher |
 | Date du rendu final et format du guide | V4 | À confirmer |
-| Nombre de couleurs (4 ou 5) et jeu de symboles | V1 | À figer |
+| Nombre de couleurs 4 et jeu de symboles | V1 | À figer |
 | Facteur de pénalité par défaut | V2 | À trancher avec le prof |
 | Pénalité par quiz ou par séance ? | V2 | À trancher |
 ---
