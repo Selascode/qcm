@@ -50,13 +50,15 @@ User (professeur, Django auth)
 │   │
 │   └── Session     : quiz, code_session, statut (attente/en_cours/pause/fini),
 │                     étape_courante, ends_at, reste_en_pause
-│           └── Participant : session, student, couleur_assignée, graine_mélange,
-│                             jeton_appareil
+│           └── Participant` (`verbose_name = "Élève (Session)"`) : session, student,
+  couleur_assignée, graine_mélange, jeton_appareil.
 │                   └── Answer : session, participant, question, choix_sélectionnés,
 │                                 reçu_à, source (app/papier), id_client
 │                                 contrainte unique (participant, question)
 │
-└── Student (hors session) : nom, prénom, code_etudiant (unique), pin_hash
+└── `Student` (`verbose_name = "Élève (Base)"`) : nom, prénom, groupe (FK),
+  code_etudiant (unique, lisible)
+
 ```
 
 ### Détails importants

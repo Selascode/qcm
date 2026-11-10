@@ -67,30 +67,31 @@ Objectif : une séance complète, avec redémarrage serveur au milieu, sans pert
 - [x] **Critère de fin** : séance de 5 étapes avec redémarrage serveur au milieu, aucune réponse perdue (test `test_parcours_v1.py`, 87 puis 103 tests verts).
 
 ---
+## Dette V2 (Corrections urgentes)
+- [ ] **Accueil** : retirer le bouton « Créer une séance » pour les anonymes.
+- [ ] **Admin** : renommer `Student` -> "Élève (Base)" et `Participant` -> "Élève (Session)" pour supprimer les doublons.
+- [ ] **Bug Import** : corriger la commande `import_participants` (`nom__iexact`) pour qu'elle trouve le groupe "ISIA4".
+- [ ] **Tests Import** : ajouter des tests d'intégration pour l'import (CSV/JSON) avec un vrai groupe.
+---
 
 ## V2 — Comptes, groupes et notes (en cours)
 
 Objectif : une séance exploitable avec de vrais élèves identifiés, rattachés à un groupe, et des notes calculées et vérifiées par des tests.
 
 ### Groupes et élèves
-- [ ] Modèle `Groupe` : `nom` (unique, ex. « ISIA4 »), `proprietaire` (FK User), `date_creation`. Admin Django.
-- [ ] `Student.groupe` : FK nullable en migration, puis non-nullable après data-migration.
-- [ ] Import CSV des participants (`nom`, `prenom`) — commande `import_participants`.
-- [ ] Import JSON des participants — même commande, détection par extension.
-- [ ] Génération identifiant (`code_etudiant`) + PIN (4 à 6 chiffres), `pin_hash` en base.
-- [ ] Commande `liste_identifiants <groupe>` : fichier imprimable (nom, prénom, identifiant, PIN).
-- [ ] Colonne « Groupe » de la vue Participants affiche le vrai nom du groupe (remplace le « — » et le TODO V2).
-- [ ] `Session.groupe` : FK nullable, choix du groupe à la création de la session (`/session/creer/`).
-- [ ] Page `/session/<code>/participants/` : liste du groupe (nom, prénom, identifiant, statut), passage au vert à la connexion (polling 1–2 s), compteur « X / Y connectés ».
-- [ ] Endpoint `/api/etat_participants/` : renvoie nom, prénom, identifiant, `connecte`, `derniere_activite_s` — jamais le PIN ni de réponse.
-- [ ] Cas `Session.groupe = NULL` : message explicite, liste des connectés (démo).
+- [ ] Modèle `Groupe` et rattachement de `Student` et `Session`.
+- [ ] **Suppression du PIN** : retirer le champ `pin_hash` du modèle `Student` et de l'import.
+- [ ] **Identifiant lisible** : générer un code du type `PRENOM-NOM` (ex: `MARIE-DUP`).
+- [ ] Interface web d'import (CSV/JSON).
+- [ ] Écran pré-séance : liste des élèves avec identifiant visible (Statut gris/vert en direct).
 
 ### Authentification élève
-- [ ] `/api/rejoindre/` accepte `code_etudiant` + `pin` (en plus du code de session).
+- [ ] `/api/rejoindre/` accepte uniquement `code_etudiant` (plus de PIN).
+- [ ] Un seul appareil actif par élève.
 - [ ] Refus d'un PIN faux avec message générique (pas d'oracle sur l'identifiant).
 - [ ] Un seul appareil actif par élève : `Participant.jeton_appareil` régénéré à chaque connexion ; ancien appareil → `401`.
 - [ ] Vue Participants : bouton « Réinitialiser » pour libérer l'appareil d'un élève.
-- [ ] Tableau prof : liste des participants connectés, identifiant affiché discrètement (jamais le PIN), heure de dernière activité.
+- [ ] Tableau prof : liste des participants connectés, identifiant affiché discrètement, heure de dernière activité.
 
 ### Notation
 - [ ] Champ `Quiz.penalite_active` (booléen, défaut `True`) et `Quiz.facteur_penalite` (float, défaut `1.0`, contrainte > 0).
