@@ -84,3 +84,11 @@ def test_aucun_libelle_anglais_dans_les_pages_rendues(client):
         contenu = reponse.content.decode()
         for libelle in LIBELLES_ANGLAIS:
             assert libelle not in contenu, f"{libelle} visible dans {url}"
+
+
+def test_accueil_anonyme_ne_propose_pas_la_creation_de_seance(client):
+    contenu = client.get("/").content.decode()
+
+    assert "Créer une séance" not in contenu
+    assert "Rejoindre une séance" in contenu
+    assert "Espace professeur" in contenu

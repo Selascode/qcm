@@ -250,7 +250,7 @@ que celui sur la page de base ».
   conforme (Nom, Prénom, Identifiant, Statut).
 - README et ADR 0008 alignés sur l'absence de PIN.
 
-**Vérifications.** `pytest` (188 tests), `ruff check .`, `manage.py check`,
+**Vérifications.** `pytest` (189 tests), `ruff check .`, `manage.py check`,
 `makemigrations --check`. Captures avant/après à ajouter dans la PR.
 
 **Décisions.** `Step` reste une ligne par paquet : les étapes virtuelles sont
