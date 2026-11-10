@@ -7,13 +7,11 @@
   const bouton = document.getElementById("btn-rejoindre");
   const message = document.getElementById("message");
   const champId = document.getElementById("code_etudiant");
-  const champPin = document.getElementById("pin");
   const cleJeton = "qcm.jeton." + code;
 
   const parametres = new URLSearchParams(window.location.search);
   if (parametres.get("reconnect") === "1") {
-    message.textContent =
-      "Reconnectez-vous avec votre identifiant et votre PIN.";
+    message.textContent = "Reconnectez-vous avec votre identifiant.";
   }
 
   async function rejoindre() {
@@ -22,19 +20,12 @@
 
     if (estGroupe) {
       const identifiant = champId ? champId.value.trim() : "";
-      const pin = champPin ? champPin.value.trim() : "";
-      if (!identifiant || !pin) {
-        message.textContent = "Saisissez votre identifiant et votre PIN.";
-        bouton.disabled = false;
-        return;
-      }
-      if (!/^\d{4,6}$/.test(pin)) {
-        message.textContent = "Le PIN doit contenir 4 à 6 chiffres.";
+      if (!identifiant) {
+        message.textContent = "Saisissez votre identifiant.";
         bouton.disabled = false;
         return;
       }
       corps.code_etudiant = identifiant;
-      corps.pin = pin;
     } else {
       corps.jeton = localStorage.getItem(cleJeton);
     }
@@ -50,8 +41,9 @@
       if (!reponse.ok || !donnees.ok) {
         if (donnees.raison === "code_inconnu") {
           message.textContent = "Séance introuvable.";
-        } else if (donnees.raison === "identifiants_invalides") {
-          message.textContent = "Identifiant ou PIN incorrect.";
+        } else if (donnees.raison === "identifiant_inconnu") {
+          message.textContent =
+            "Identifiant inconnu. Vérifiez l'écran de pré-séance.";
         } else {
           message.textContent = "Connexion impossible.";
         }

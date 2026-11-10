@@ -1,10 +1,9 @@
-"""Import des participants, génération des identifiants et liste imprimable."""
+"""Import des participants (CLI) et génération des identifiants sans PIN."""
 
 import io
 import json
 
 import pytest
-from django.contrib.auth.hashers import check_password
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
@@ -21,64 +20,68 @@ def _ecrire(chemin, contenu: str):
     return chemin
 
 
-def _importer(chemin, groupe, identifiants):
+def _importer(chemin, groupe):
     sortie = io.StringIO()
     call_command(
         "import_participants",
         str(chemin),
         groupe=groupe.nom,
-        identifiants=str(identifiants),
         stdout=sortie,
     )
     return sortie.getvalue()
 
 
-def test_import_csv_genere_identifiant_et_pin(tmp_path, groupe):
+def test_import_csv_genere_identifiants_lisibles_sans_pin(tmp_path, groupe):
     chemin = _ecrire(tmp_path / "eleves.csv", CSV_EXEMPLE)
-    identifiants = tmp_path / "identifiants.json"
 
-    sortie = _importer(chemin, groupe, identifiants)
+    sortie = _importer(chemin, groupe)
 
     assert "2 élève(s)" in sortie
-    assert Student.objects.filter(groupe=groupe).count() == 2
-    donnees = json.loads(identifiants.read_text(encoding="utf-8"))
-    assert donnees["groupe"] == groupe.nom
-    assert len(donnees["eleves"]) == 2
-
-    for eleve in donnees["eleves"]:
-        student = Student.objects.get(code_etudiant=eleve["code_etudiant"])
-        assert student.groupe == groupe
-        assert student.pin_hash != eleve["pin"]
-        assert check_password(eleve["pin"], student.pin_hash)
-        assert len(eleve["pin"]) == 6
-        assert eleve["pin"].isdigit()
+    students = list(Student.objects.order_by("nom"))
+    assert [student.code_etudiant for student in students] == [
+        "MARIE-DUP00",
+        "PAUL-MAR00",
+    ]
+    assert not hasattr(students[0], "pin_hash")
+    assert "MARIE-DUP00" in sortie
 
 
-def test_import_json(tmp_path, groupe):
+def test_import_json_codes(tmp_path, groupe):
     chemin = _ecrire(
         tmp_path / "eleves.json",
         json.dumps(
             [
                 {"nom": "Durand", "prenom": "Alice"},
-                {"nom": "Petit", "prenom": "Benoît"},
-            ],
-            ensure_ascii=False,
+                {"nom": "Petit", "prenom": "Benoit"},
+            ]
         ),
     )
-    identifiants = tmp_path / "identifiants.json"
 
-    _importer(chemin, groupe, identifiants)
+    _importer(chemin, groupe)
 
-    assert sorted(
-        Student.objects.values_list("prenom", flat=True)
-    ) == ["Alice", "Benoît"]
+    codes = sorted(Student.objects.values_list("code_etudiant", flat=True))
+    assert codes == ["ALICE-DUR00", "BENOIT-PET00"]
+
+
+def test_import_groupe_nom_insensible_a_la_casse(tmp_path, groupe):
+    chemin = _ecrire(tmp_path / "eleves.csv", CSV_EXEMPLE)
+    sortie = io.StringIO()
+
+    call_command(
+        "import_participants",
+        str(chemin),
+        groupe="isia4",
+        stdout=sortie,
+    )
+
+    assert Student.objects.filter(groupe=groupe).count() == 2
 
 
 def test_import_csv_en_tete_manquant(tmp_path, groupe):
     chemin = _ecrire(tmp_path / "eleves.csv", "prenom\nMarie\n")
 
     with pytest.raises(CommandError):
-        _importer(chemin, groupe, tmp_path / "identifiants.json")
+        _importer(chemin, groupe)
 
     assert Student.objects.count() == 0
 
@@ -90,7 +93,7 @@ def test_import_csv_doublon_dans_le_fichier(tmp_path, groupe):
     )
 
     with pytest.raises(CommandError):
-        _importer(chemin, groupe, tmp_path / "identifiants.json")
+        _importer(chemin, groupe)
 
     assert Student.objects.count() == 0
 
@@ -99,7 +102,7 @@ def test_import_csv_fichier_vide(tmp_path, groupe):
     chemin = _ecrire(tmp_path / "eleves.csv", "nom,prenom\n")
 
     with pytest.raises(CommandError):
-        _importer(chemin, groupe, tmp_path / "identifiants.json")
+        _importer(chemin, groupe)
 
     assert Student.objects.count() == 0
 
@@ -122,7 +125,7 @@ def test_import_extension_non_reconnue(tmp_path, groupe):
     chemin = _ecrire(tmp_path / "eleves.txt", CSV_EXEMPLE)
 
     with pytest.raises(CommandError):
-        _importer(chemin, groupe, tmp_path / "identifiants.json")
+        _importer(chemin, groupe)
 
     assert Student.objects.count() == 0
 
@@ -131,13 +134,10 @@ def test_import_eleve_deja_present_refuse(tmp_path, groupe):
     from qcm.tests.helpers import creer_eleve
 
     creer_eleve(groupe, nom="Dupont", prenom="Marie")
-    chemin = _ecrire(
-        tmp_path / "eleves.csv",
-        "nom,prenom\nDupont,Marie\n",
-    )
+    chemin = _ecrire(tmp_path / "eleves.csv", "nom,prenom\nDupont,Marie\n")
 
     with pytest.raises(CommandError):
-        _importer(chemin, groupe, tmp_path / "identifiants.json")
+        _importer(chemin, groupe)
 
     assert Student.objects.count() == 1
 
@@ -150,85 +150,23 @@ def test_import_transactionnel_echec_aucune_ligne(tmp_path, groupe, monkeypatch)
         compteur["n"] += 1
         if compteur["n"] == 2:
             raise module.ErreurImportParticipants("échec simulé")
-        return f"XX{compteur['n']:04d}"
+        return f"XX{compteur['n']:02d}"
 
     monkeypatch.setattr(module, "generer_code_etudiant", generer_qui_echoue)
 
     with pytest.raises(CommandError):
-        _importer(chemin, groupe, tmp_path / "identifiants.json")
+        _importer(chemin, groupe)
 
     assert Student.objects.count() == 0
 
 
-def test_liste_identifiants_produit_le_html(tmp_path, groupe):
-    import_command = "import_participants"
-    identifiants = tmp_path / "identifiants.json"
-    call_command(
-        import_command,
-        str(_ecrire(tmp_path / "eleves.csv", CSV_EXEMPLE)),
-        groupe=groupe.nom,
-        identifiants=str(identifiants),
-        stdout=io.StringIO(),
-    )
-    feuille = tmp_path / "identifiants.html"
-
-    call_command(
-        "liste_identifiants",
-        groupe.nom,
-        identifiants=str(identifiants),
-        sortie=str(feuille),
-        stdout=io.StringIO(),
+def test_generer_code_etudiant_unique(groupe):
+    Student.objects.create(
+        nom="Dupont",
+        prenom="Marie",
+        code_etudiant=module.generer_code_etudiant("Dupont", "Marie"),
+        groupe=groupe,
     )
 
-    contenu = feuille.read_text(encoding="utf-8")
-    assert "Dupont" in contenu
-    assert "Marie" in contenu
-    assert "Identifiant" in contenu
-    assert "PIN" in contenu
-    assert "pin_hash" not in contenu
-    donnees = json.loads(identifiants.read_text(encoding="utf-8"))
-    for eleve in donnees["eleves"]:
-        assert eleve["code_etudiant"] in contenu
-        assert eleve["pin"] in contenu
-
-
-def test_liste_identifiants_sans_fichier_echoue(tmp_path, groupe):
-    with pytest.raises(CommandError):
-        call_command(
-            "liste_identifiants",
-            groupe.nom,
-            identifiants=str(tmp_path / "absent.json"),
-            sortie=str(tmp_path / "feuille.html"),
-            stdout=io.StringIO(),
-        )
-
-
-def test_liste_identifiants_regenerer(tmp_path, groupe):
-    identifiants = tmp_path / "identifiants.json"
-    call_command(
-        "import_participants",
-        str(_ecrire(tmp_path / "eleves.csv", CSV_EXEMPLE)),
-        groupe=groupe.nom,
-        identifiants=str(identifiants),
-        stdout=io.StringIO(),
-    )
-    anciens = {
-        student.code_etudiant: student.pin_hash
-        for student in Student.objects.all()
-    }
-
-    call_command(
-        "liste_identifiants",
-        groupe.nom,
-        identifiants=str(identifiants),
-        sortie=str(tmp_path / "feuille.html"),
-        regenerer=True,
-        stdout=io.StringIO(),
-    )
-
-    nouveaux = json.loads(identifiants.read_text(encoding="utf-8"))
-    assert len(nouveaux["eleves"]) == 2
-    for eleve in nouveaux["eleves"]:
-        student = Student.objects.get(code_etudiant=eleve["code_etudiant"])
-        assert student.pin_hash != anciens[eleve["code_etudiant"]]
-        assert check_password(eleve["pin"], student.pin_hash)
+    second = module.generer_code_etudiant("Dupont", "Marie")
+    assert second == "MARIE-DUP01"

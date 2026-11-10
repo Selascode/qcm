@@ -18,6 +18,7 @@ from django.utils import timezone
 
 from qcm.couleurs import infos_couleur
 from qcm.models import Answer, Participant, Session
+from qcm.services.repartition import EtapeVirtuelle
 
 
 class ErreurPilotage(ValueError):
@@ -42,6 +43,7 @@ def _session_verrouillee(session_id: int) -> Session:
 
 
 def _etapes_ordonnees(session: Session) -> list:
+    """Paquets (lignes ``Step``) ordonnés ; chaque paquet contient 1 à 4 questions."""
     etapes = list(session.quiz.steps.order_by("numero"))
     numeros = [etape.numero for etape in etapes]
     if numeros != list(range(1, len(etapes) + 1)):
@@ -49,22 +51,71 @@ def _etapes_ordonnees(session: Session) -> list:
     return etapes
 
 
+def etapes_virtuelles(session: Session) -> list[EtapeVirtuelle]:
+    """Étapes affichées : T étapes virtuelles pour un paquet de T questions."""
+    etapes = []
+    numero = 0
+    for numero_paquet, paquet in enumerate(_etapes_ordonnees(session), start=1):
+        questions = list(paquet.questions.order_by("ordre", "id"))
+        for index in range(len(questions)):
+            numero += 1
+            etapes.append(
+                EtapeVirtuelle(
+                    numero=numero,
+                    paquet=tuple(questions),
+                    index_dans_paquet=index,
+                    numero_paquet=numero_paquet,
+                )
+            )
+    return etapes
+
+
+def nombre_etapes(session: Session) -> int:
+    """Nombre d'étapes affichées (et non de paquets stockés)."""
+    return len(etapes_virtuelles(session))
+
+
+def _etape_virtuelle(session: Session, numero: int) -> EtapeVirtuelle | None:
+    etapes = etapes_virtuelles(session)
+    if 1 <= numero <= len(etapes):
+        return etapes[numero - 1]
+    return None
+
+
+def questions_de_l_etape(session: Session, numero: int) -> list:
+    """Questions du paquet affiché à l'étape virtuelle ``numero``."""
+    etape = _etape_virtuelle(session, numero)
+    if etape is None:
+        return []
+    return list(etape.paquet)
+
+
+def _duree_etape(session: Session, numero: int) -> int:
+    etape = _etape_virtuelle(session, numero)
+    if etape is None:
+        raise ErreurPilotage("Étape courante incohérente.")
+    paquets = _etapes_ordonnees(session)
+    return paquets[etape.numero_paquet - 1].duree_s
+
+
 def _avancer(session: Session, maintenant) -> Session:
-    """Avance d'une étape (ou termine). Une seule étape à la fois."""
-    etapes = _etapes_ordonnees(session)
+    """Avance d'une étape virtuelle (ou termine). Une seule étape à la fois."""
+    total = nombre_etapes(session)
     if session.etape_courante < 1:
         session.etape_courante = 1
-        if etapes:
-            session.ends_at = maintenant + timedelta(seconds=etapes[0].duree_s)
+        if total:
+            session.ends_at = maintenant + timedelta(
+                seconds=_duree_etape(session, 1)
+            )
             session.statut = Session.STATUT_EN_COURS
             session.reste_en_pause = None
         else:
             session.statut = Session.STATUT_FINI
             session.ends_at = None
-    elif session.etape_courante < len(etapes):
+    elif session.etape_courante < total:
         session.etape_courante += 1
         session.ends_at = maintenant + timedelta(
-            seconds=etapes[session.etape_courante - 1].duree_s
+            seconds=_duree_etape(session, session.etape_courante)
         )
         session.statut = Session.STATUT_EN_COURS
         session.reste_en_pause = None
@@ -105,12 +156,12 @@ def demarrer_session(session: Session, maintenant=None) -> Session:
         session = _session_verrouillee(session.pk)
         if session.statut != Session.STATUT_ATTENTE:
             raise ErreurPilotage("La séance n'est pas en attente.")
-        etapes = _etapes_ordonnees(session)
-        if not etapes:
+        total = nombre_etapes(session)
+        if not total:
             raise ErreurPilotage("Le QCM ne contient aucune étape.")
         session.statut = Session.STATUT_EN_COURS
         session.etape_courante = 1
-        session.ends_at = maintenant + timedelta(seconds=etapes[0].duree_s)
+        session.ends_at = maintenant + timedelta(seconds=_duree_etape(session, 1))
         session.reste_en_pause = None
         session.save(
             update_fields=[
@@ -215,15 +266,14 @@ def etape_precedente(session: Session, maintenant=None) -> Session:
             Session.STATUT_PAUSE,
         ):
             raise ErreurPilotage("La séance n'est pas active.")
-        etapes = _etapes_ordonnees(session)
         if session.etape_courante <= 1:
             raise ErreurPilotage("La séance est déjà à la première étape.")
-        if session.etape_courante > len(etapes):
+        if session.etape_courante > nombre_etapes(session):
             raise ErreurPilotage("Étape courante incohérente.")
         session.etape_courante -= 1
         session.statut = Session.STATUT_EN_COURS
         session.ends_at = maintenant + timedelta(
-            seconds=etapes[session.etape_courante - 1].duree_s
+            seconds=_duree_etape(session, session.etape_courante)
         )
         session.reste_en_pause = None
         session.save(
@@ -238,21 +288,21 @@ def etape_precedente(session: Session, maintenant=None) -> Session:
 
 
 def question_courante_pour(session: Session, participant):
-    """Question que ce participant doit traiter à l'étape courante.
+    """Question que ce participant doit traiter à l'étape virtuelle courante.
 
-    La couleur de l'élève distribue les participants sur les questions
-    présentes. Avec 4 questions, chaque couleur tombe sur sa colonne ; avec
-    moins de questions, on replie modulo le nombre de questions pour que
-    chaque élève ait toujours une question à traiter.
+    La couleur initiale tourne à chaque étape du paquet :
+    ``(couleur_initiale - 1 + étape_dans_paquet) % T + 1``. En T étapes, chaque
+    élève répond donc à toutes les questions du paquet.
     """
-    etape = session.quiz.steps.filter(numero=session.etape_courante).first()
-    if etape is None:
+    etape = _etape_virtuelle(session, session.etape_courante)
+    if etape is None or not etape.paquet:
         return None
-    questions = list(etape.questions.order_by("ordre", "id"))
-    if not questions:
-        return None
-    index = (participant.couleur_assignee - 1) % len(questions)
-    return questions[index]
+    questions = list(etape.paquet)
+    taille = len(questions)
+    couleur = (
+        (participant.couleur_assignee - 1 + etape.index_dans_paquet) % taille + 1
+    )
+    return questions[couleur - 1]
 
 
 def lettres_melangees(participant, question) -> list[str]:
@@ -268,7 +318,7 @@ def compter_reponses_par_question(session: Session, questions) -> dict[int, int]
     if not identifiants:
         return {}
     lignes = (
-        Answer.objects.filter(question_id__in=identifiants)
+        Answer.objects.filter(session=session, question_id__in=identifiants)
         .values("question_id")
         .annotate(nombre=Count("id"))
     )

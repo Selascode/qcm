@@ -259,7 +259,6 @@ class Student(models.Model):
     nom = models.CharField("Nom", max_length=100)
     prenom = models.CharField("Prénom", max_length=100)
     code_etudiant = models.CharField("Identifiant", max_length=32, unique=True)
-    pin_hash = models.CharField("PIN (haché)", max_length=128)
     groupe = models.ForeignKey(
         Groupe,
         on_delete=models.PROTECT,
@@ -269,8 +268,8 @@ class Student(models.Model):
 
     class Meta:
         ordering = ("nom", "prenom")
-        verbose_name = "Élève"
-        verbose_name_plural = "Élèves"
+        verbose_name = "Élève (Base)"
+        verbose_name_plural = "Élèves (Base)"
 
     def __str__(self) -> str:
         return f"{self.prenom} {self.nom} ({self.code_etudiant})"
@@ -386,8 +385,8 @@ class Participant(models.Model):
 
     class Meta:
         ordering = ("id",)
-        verbose_name = "Élève"
-        verbose_name_plural = "Élèves"
+        verbose_name = "Élève (Session)"
+        verbose_name_plural = "Élèves (Session)"
         constraints = (
             models.UniqueConstraint(
                 fields=["session", "student"],

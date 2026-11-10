@@ -215,4 +215,48 @@ puisse avoir directement le qr code ainsi que le code qui s'affiche. »
 **Décision.** Le QR est réaffiché sur le tableau uniquement pendant l'attente
 (mise à jour de l'ADR 0005) ; pendant la séance, il reste absent.
 
+## 2026-11-10 — V2 corrigée : identifiants sans PIN, import web, rotation par blocs
+
+**Objectif.** Appliquer les attendus V2 mis à jour : verbose names, import
+`nom__iexact`, suppression du PIN et identifiants lisibles, import web,
+rotation des questions par blocs, mode Présentation (timer à la même taille
+que le tableau de base) et écran de pré-séance.
+
+**Prompt / demande.** Issue #5, commentaire du 2026-11-10 « Implémente et
+corrige la V2… » ; plan de 8 lignes (commentaire `6763671700`) validé avec la
+précision « à la 5 le timer de l'écran présentation doit faire la même taille
+que celui sur la page de base ».
+
+**Réalisé.**
+
+- Admin : `Student` → « Élève (Base) », `Participant` → « Élève (Session) » ;
+  `import_participants` cherche le groupe avec `nom__iexact` ; tests d'import
+  CSV/JSON avec un vrai groupe.
+- Identifiants : suppression de `Student.pin_hash` (migration `0006`) ;
+  identifiant `PRENOM-NOMnn` ; `/api/rejoindre/` n'accepte que
+  `code_session` + `code_etudiant` ; un seul appareil (jeton écrasé) ;
+  formulaire/JS sans PIN ; `liste_identifiants` retiré.
+- Import web : `/groupe/<id>/importer-eleves/` (propriétaire), upload CSV/JSON,
+  résumé, export CSV/JSON des identifiants ; lien depuis l'admin Groupe.
+- Répartition : `qcm/services.py` converti en paquet ; helper
+  `repartition.py::generer_etapes` ; `Step` = paquet (pas de duplication de
+  `Question`) et étapes virtuelles ; couleur
+  `(couleur initiale + étape dans le paquet)` ; l'import JSON regroupe par 4 ;
+  tests N=10 → 10 étapes, N=5 → 5.
+- Mode Présentation : `/tableau/<code>/presentation/` (questions + timer +
+  compteurs, sans contrôles) ; timer de la même taille que le tableau de base ;
+  bouton sur le tableau.
+- Accueil : « Créer une séance » réservé aux profs (test) ; page participants
+  conforme (Nom, Prénom, Identifiant, Statut).
+- README et ADR 0008 alignés sur l'absence de PIN.
+
+**Vérifications.** `pytest` (188 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures avant/après à ajouter dans la PR.
+
+**Décisions.** `Step` reste une ligne par paquet : les étapes virtuelles sont
+calculées, ce qui évite de dupliquer `Question` (uid unique par quiz). Le PIN
+est retiré : l'identifiant est visible sur l'écran de pré-séance et un
+nouvel appareil remplace l'ancien. Le timer de la présentation reprend
+exactement la taille du timer du tableau de base (demande humaine).
+
 

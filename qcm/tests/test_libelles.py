@@ -4,7 +4,16 @@ import pytest
 from django.contrib.auth import get_user_model
 
 from qcm.import_json import importer_quiz
-from qcm.models import Answer, Choice, Participant, Question, Quiz, Session, Step
+from qcm.models import (
+    Answer,
+    Choice,
+    Participant,
+    Question,
+    Quiz,
+    Session,
+    Step,
+    Student,
+)
 from qcm.tests.helpers import creer_session, donnees_quiz
 
 pytestmark = pytest.mark.django_db
@@ -24,7 +33,8 @@ MODELES = (
     (Question, "Question", "Questions"),
     (Choice, "Choix", "Choix"),
     (Session, "Séance", "Séances"),
-    (Participant, "Élève", "Élèves"),
+    (Student, "Élève (Base)", "Élèves (Base)"),
+    (Participant, "Élève (Session)", "Élèves (Session)"),
     (Answer, "Réponse", "Réponses"),
 )
 
@@ -65,6 +75,7 @@ def test_aucun_libelle_anglais_dans_les_pages_rendues(client):
         "/admin/qcm/quiz/",
         "/admin/qcm/session/",
         "/admin/qcm/step/",
+        "/admin/qcm/student/",
     )
 
     for url in urls:

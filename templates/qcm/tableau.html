@@ -81,6 +81,11 @@
         Voir les participants
       </a>
       <a href="{% url 'qcm:resultats' session.code_session %}">Résultats</a>
+      <a
+        href="{% url 'qcm:presentation' session.code_session %}"
+        target="_blank"
+        rel="noopener"
+      >Mode Présentation</a>
     </nav>
   </header>
 

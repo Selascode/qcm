@@ -212,11 +212,6 @@ button {
   text-transform: uppercase;
 }
 
-.form-rejoindre input#pin {
-  font-size: 1.6rem;
-  letter-spacing: 0.35em;
-}
-
 .aide-form {
   margin: -4px 0 0;
   color: var(--texte-doux);

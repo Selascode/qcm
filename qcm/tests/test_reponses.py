@@ -6,8 +6,13 @@ import uuid
 import pytest
 
 from qcm.import_json import importer_quiz
-from qcm.models import Answer
-from qcm.services import etape_precedente, etape_suivante, mettre_en_pause
+from qcm.models import Answer, Participant
+from qcm.services import (
+    compter_reponses_par_question,
+    etape_precedente,
+    etape_suivante,
+    mettre_en_pause,
+)
 from qcm.tests.helpers import (
     creer_session,
     demarrer,
@@ -234,3 +239,23 @@ def test_une_reponse_par_question_meme_apres_retour(client, proprietaire):
 
     assert seconde.status_code == 409
     assert seconde.json()["raison"] == "deja_repondu"
+
+
+def test_compteurs_de_reponses_isoles_par_session(proprietaire):
+    quiz = importer_quiz(donnees_quiz(1, 1), proprietaire)
+    session_a = creer_session(quiz)
+    session_b = creer_session(quiz)
+    question = quiz.questions.get(uid="E1Q1")
+    participant = Participant.objects.create(session=session_a)
+    Answer.objects.create(
+        session=session_a,
+        participant=participant,
+        question=question,
+        choix_selectionnes=["A"],
+        id_client=uuid.uuid4(),
+    )
+
+    assert compter_reponses_par_question(session_a, [question]) == {
+        question.pk: 1
+    }
+    assert compter_reponses_par_question(session_b, [question]) == {}

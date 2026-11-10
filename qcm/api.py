@@ -9,7 +9,6 @@ import json
 import uuid
 
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.http import JsonResponse
@@ -21,9 +20,6 @@ from django.views.decorators.http import require_GET, require_POST
 from qcm import services
 from qcm.couleurs import infos_couleur
 from qcm.models import Answer, Participant, Question, Session, Student
-
-# Hash factice : un identifiant inconnu et un PIN faux coûtent le même temps.
-_HASH_INCONNU = make_password("identifiant-inconnu")
 
 
 def _json(request):
@@ -74,21 +70,17 @@ def _reponse_participant(session: Session, participant: Participant) -> JsonResp
 
 
 def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
-    """Connexion d'un élève identifié : identifiant + PIN, puis jeton unique."""
+    """Connexion d'un élève identifié : code de session + identifiant."""
     code_etudiant = str(donnees.get("code_etudiant") or "").strip()
-    pin = str(donnees.get("pin") or "").strip()
-    if not code_etudiant or not pin:
-        return _erreur("identifiants_requis", 401)
+    if not code_etudiant:
+        return _erreur("identifiant_requis")
 
     student = Student.objects.filter(
         code_etudiant__iexact=code_etudiant,
         groupe_id=session.groupe_id,
     ).first()
-    hash_a_verifier = student.pin_hash if student else _HASH_INCONNU
-    pin_valide = check_password(pin, hash_a_verifier)
-    if student is None or not pin_valide:
-        # Même raison et même code pour un identifiant inconnu et un PIN faux.
-        return _erreur("identifiants_invalides", 401)
+    if student is None:
+        return _erreur("identifiant_inconnu", 404)
 
     maintenant = timezone.now()
     with transaction.atomic():
@@ -201,7 +193,7 @@ def etat_eleve(request):
         "ok": True,
         "statut": session.statut,
         "etape": session.etape_courante,
-        "nb_etapes": session.quiz.steps.count(),
+        "nb_etapes": services.nombre_etapes(session),
     }
 
     if session.statut in (
@@ -278,17 +270,20 @@ def repondre(request):
                 }
             )
 
-        question = (
-            Question.objects.filter(
-                quiz=session.quiz,
-                step__numero=session.etape_courante,
-                uid=question_uid,
-            )
-            .prefetch_related("choices")
-            .first()
+        questions = services.questions_de_l_etape(
+            session, session.etape_courante
+        )
+        question = next(
+            (candidat for candidat in questions if candidat.uid == question_uid),
+            None,
         )
         if question is None:
             return _erreur("question_inconnue", 404)
+        question = (
+            Question.objects.filter(pk=question.pk)
+            .prefetch_related("choices")
+            .first()
+        )
 
         cible = services.question_courante_pour(session, participant)
         if cible is None or cible.pk != question.pk:
@@ -350,12 +345,9 @@ def _questions_prof(session: Session) -> list[dict]:
         Session.STATUT_PAUSE,
     ):
         return []
-    etape = session.quiz.steps.filter(numero=session.etape_courante).first()
-    if etape is None:
+    questions = services.questions_de_l_etape(session, session.etape_courante)
+    if not questions:
         return []
-    questions = list(
-        etape.questions.prefetch_related("choices").order_by("ordre", "id")
-    )
     compteurs = services.compter_reponses_par_question(session, questions)
     resultat = []
     for question in questions:
@@ -400,7 +392,7 @@ def etat_prof(request):
             "code": session.code_session,
             "statut": session.statut,
             "etape": session.etape_courante,
-            "nb_etapes": session.quiz.steps.count(),
+            "nb_etapes": services.nombre_etapes(session),
             "temps_restant_s": services.temps_restant_s(session),
             "ends_at": session.ends_at.isoformat() if session.ends_at else None,
             "nb_participants": session.participants.count(),

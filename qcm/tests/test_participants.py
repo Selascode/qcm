@@ -37,8 +37,8 @@ def session_groupe(proprietaire, groupe):
     return Session.objects.create(quiz=quiz, groupe=groupe)
 
 
-def _connexion(client, session, code="MD0001", pin="123456"):
-    return rejoindre_eleve(client, session, code, pin)
+def _connexion(client, session, code="MD0001"):
+    return rejoindre_eleve(client, session, code)
 
 
 def test_page_participants_liste_le_groupe_complet(
@@ -59,7 +59,6 @@ def test_page_participants_liste_le_groupe_complet(
     assert "MD0001" in contenu
     assert "Martin" in contenu
     assert "0 / 2" in contenu
-    assert "123456" not in contenu
     assert "pin_hash" not in contenu
 
 
@@ -153,7 +152,7 @@ def test_etat_participants_refuse_a_un_autre_professeur(
 
 
 def test_etat_participants_sans_fuite(client, proprietaire, groupe, session_groupe):
-    creer_eleve(groupe, code_etudiant="MD0001", pin="123456")
+    creer_eleve(groupe, code_etudiant="MD0001")
     _connexion(client, session_groupe)
     client.force_login(proprietaire)
 
@@ -164,7 +163,6 @@ def test_etat_participants_sans_fuite(client, proprietaire, groupe, session_grou
     verifier_cles(donnees)
     for interdit in ("pin_hash", "enonce", "est_correct"):
         assert interdit not in contenu
-    assert "123456" not in contenu
 
 
 def test_reinitialiser_l_appareil(

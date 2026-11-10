@@ -1,13 +1,13 @@
-# QCM en direct — V1
+# QCM en direct
 
 Application web Django pour faire répondre une classe à un QCM projeté au
 tableau. Les élèves répondent depuis leur téléphone **sans jamais voir
 l'énoncé** ; le serveur est la seule référence temporelle.
 
-Cette branche implémente le périmètre V1 du ticket #1 et les corrections
-d'interface et d'usage du ticket #3 :
+Ce dépôt couvre la V1 (ticket #1 et dette #3) et la V2 (comptes, groupes,
+notes) :
 
-- import JSON d'un QCM (format `docs/SPEC.md` §5) et saisie via l'admin ;
+- import JSON d'un QCM (format `docs/SPEC.md`) et saisie via l'admin ;
 - code de session + QR code, salon d'attente ;
 - 1 à 4 questions par étape, une couleur et un symbole par question ;
 - couleur, symbole et graine de mélange persistés par élève ;
@@ -17,12 +17,14 @@ d'interface et d'usage du ticket #3 :
   anti-doublon `id_client` ;
 - tableau professeur protégé, questions en pleine largeur, compteurs de
   réponses et de participants discrets en pied de page, KaTeX et images ;
-- création de séance via `/session/creer/`, QR code affiché uniquement sur la
-  page initiale de la séance ;
+- création de séance via `/session/creer/`, QR code sur la page initiale et
+  sur le tableau en attente ;
 - bouton « Terminer la séance » sur le tableau et sur le téléphone ;
 - libellés français et colonne « Groupe » dans la vue Participants ;
 - tests du refus tardif, du doublon, de la reconnexion et de l'absence de
-  fuite d'énoncé.
+  fuite d'énoncé ;
+- V2 : comptes élèves sans PIN, import CSV/JSON (interface Groupe et CLI),
+  rotation des questions par blocs, mode Présentation et écran de pré-séance.
 
 ## Installation (dev / démo)
 
@@ -54,6 +56,23 @@ python manage.py import_quiz examples/quiz_demo.json --proprietaire <utilisateur
    déjà reçues restent en base et la séance reprend à la même étape.
 6. Utiliser Pause / Reprendre / +30 s / +1 min / +2 min / Précédent / Suivant,
    et « Terminer la séance » pour clôturer et revenir à l'accueil.
+
+## V2 — comptes, groupes et import
+
+- Le professeur crée un groupe dans l'admin (`Groupe`), puis importe ses
+  élèves depuis `/groupe/<id>/importer-eleves/` (CSV `nom,prenom` ou JSON
+  `[{"nom": "…", "prenom": "…"}]`). La commande
+  `python manage.py import_participants <fichier> --groupe <nom>` reste
+  disponible (recherche du groupe insensible à la casse).
+- L'import génère un identifiant lisible et unique (`MARIE-DUP32`), sans PIN.
+  La liste CSV/JSON des identifiants est téléchargeable depuis la même page.
+- La séance est rattachée à un groupe à la création ; les élèves rejoignent
+  avec l'identifiant affiché sur l'écran de pré-séance.
+- Les questions sont regroupées en paquets de 4 ; un paquet de T questions
+  génère T étapes (rotation de la couleur), pour que chaque élève réponde à
+  toutes les questions du paquet.
+- Le tableau propose un « Mode Présentation » plein écran (questions, timer et
+  compteurs, sans contrôles).
 
 ## Accès depuis un téléphone (Wi-Fi local)
 
@@ -108,14 +127,15 @@ connexions au milieu, puis vérifie qu'aucune réponse n'est perdue.
 
 - **Quatre couleurs** (`#C62828`, `#1565C0`, `#2E7D32`, `#6A1B9A`), chacune
   doublée d'un symbole (● ▲ ■ ◆), pour ne pas dépendre de la couleur seule.
-- Avec quatre questions dans une étape, chaque couleur tombe sur sa colonne ;
-  avec moins de questions, la couleur est repliée modulo le nombre de
-  questions pour que chaque élève ait toujours une question à traiter.
+- **Rotation par paquets (V2)** : les questions sont regroupées par paquets de
+  4 ; un paquet de T questions génère T étapes et la couleur de l'élève tourne
+  à chaque étape, pour qu'il réponde à toutes les questions du paquet.
 - **Tolérance de latence : 0 s.** Une réponse reçue après `ends_at` est refusée.
-- Format JSON figé : `titre` + `questions[]` avec `uid`, `etape`, `duree_s`,
-  `enonce`, `type`, `choix[]` (`lettre`, `texte`, `correct`). La durée est
-  portée par l'étape ; toutes les questions d'une même étape doivent annoncer
-  la même `duree_s`.
+- Format JSON : `titre` + `questions[]` avec `uid`, `duree_s`, `enonce`,
+  `type`, `choix[]` (`lettre`, `texte`, `correct`). Le champ `etape` reste
+  accepté mais n'est plus utilisé : les questions sont lues dans l'ordre du
+  fichier et regroupées par paquets de 4 ; la durée du paquet est celle de sa
+  première question.
 
 Les ADR correspondants sont dans `docs/decisions/`.
 
@@ -129,8 +149,8 @@ Les ADR correspondants sont dans `docs/decisions/`.
 
 ## Limites connues de la V1
 
-- Les comptes élèves, le PIN, la notation, les exports et le papier sont
-  hors périmètre (V2/V3).
+- La V2 couvre les comptes élèves, les groupes, l'import et la notation ; les
+  exports CSV/PDF et le papier restent en V3.
 - KaTeX est chargé depuis un CDN sur la page tableau ; hors ligne, les
   formules s'affichent en texte brut. Le reste de l'application fonctionne.
 - Le QR code est un SVG généré à la volée, sans stockage.

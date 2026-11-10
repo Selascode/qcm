@@ -1,0 +1,86 @@
+{% extends "qcm/base.html" %}
+{% load static %}
+{% block title %}Importer des élèves — {{ groupe.nom }}{% endblock %}
+{% block body_class %}page-prof{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'qcm/prof.css' %}">
+{% endblock %}
+{% block content %}
+<main class="prof-app">
+  <header class="barre-prof">
+    <div>
+      <p class="sur-titre">Groupe</p>
+      <h1>Importer des élèves — {{ groupe.nom }}</h1>
+      <p class="sous-titre">
+        {{ groupe.etudiants.count }} élève(s) dans ce groupe. Les identifiants
+        sont générés automatiquement à l'import.
+      </p>
+    </div>
+    <nav class="liens-prof" aria-label="Navigation du groupe">
+      <a class="bouton-secondaire" href="{% url 'qcm:session_creer' %}">
+        Créer une séance
+      </a>
+      <a class="bouton-secondaire" href="/admin/qcm/groupe/">Admin groupes</a>
+    </nav>
+  </header>
+
+  {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+
+  <section class="bloc-resultats">
+    <h2>Fichier CSV ou JSON</h2>
+    <p class="aide">
+      CSV : en-tête <code>nom,prenom</code>. JSON : liste d'objets
+      <code>{"nom": "…", "prenom": "…"}</code>. Les doublons et les erreurs de
+      format sont refusés ; l'import est transactionnel.
+    </p>
+    <form method="post" enctype="multipart/form-data" class="form-import">
+      {% csrf_token %}
+      <input type="file" name="fichier" accept=".csv,.json" required>
+      <button type="submit" class="bouton-principal">Importer</button>
+    </form>
+  </section>
+
+  <section class="bloc-resultats">
+    <h2>Identifiants</h2>
+    <p class="aide">
+      Aucun PIN n'est distribué : l'élève se connecte avec son identifiant,
+      affiché sur l'écran de pré-séance.
+    </p>
+    <div class="actions-import">
+      <a class="bouton-secondaire" href="{% url 'qcm:exporter_identifiants' groupe.pk 'csv' %}">
+        Télécharger CSV
+      </a>
+      <a class="bouton-secondaire" href="{% url 'qcm:exporter_identifiants' groupe.pk 'json' %}">
+        Télécharger JSON
+      </a>
+    </div>
+    {% if resultats %}
+      <div class="table-scroll">
+        <table class="table-prof">
+          <thead>
+            <tr><th>Nom</th><th>Prénom</th><th>Identifiant</th></tr>
+          </thead>
+          <tbody>
+            {% for eleve in resultats %}
+              <tr>
+                <td>{{ eleve.nom }}</td>
+                <td>{{ eleve.prenom }}</td>
+                <td class="identifiant">{{ eleve.code_etudiant }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </section>
+
+  <p class="note-bas">
+    Les identifiants sont uniques et lisibles (ex. <code>MARIE-DUP32</code>).
+    La commande <code>manage.py import_participants</code> reste disponible.
+  </p>
+</main>
+{% endblock %}

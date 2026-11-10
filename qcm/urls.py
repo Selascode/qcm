@@ -11,8 +11,23 @@ urlpatterns = [
     path("rejoindre/", views.rejoindre_saisie, name="rejoindre_saisie"),
     path("rejoindre/<str:code>/", views.rejoindre, name="rejoindre"),
     path("eleve/<str:code>/", views.eleve, name="eleve"),
+    path(
+        "tableau/<str:code>/presentation/",
+        views.presentation,
+        name="presentation",
+    ),
     path("tableau/<str:code>/", views.tableau, name="tableau"),
     path("session/creer/", views.session_creer, name="session_creer"),
+    path(
+        "groupe/<int:groupe_id>/importer-eleves/",
+        views.importer_eleves,
+        name="importer_eleves",
+    ),
+    path(
+        "groupe/<int:groupe_id>/identifiants/<str:format>/",
+        views.exporter_identifiants,
+        name="exporter_identifiants",
+    ),
     path(
         "session/<str:code>/participants/",
         views.participants,

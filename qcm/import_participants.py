@@ -1,18 +1,16 @@
 """Import de listes d'élèves (CSV ou JSON) et génération des identifiants.
 
-La base ne stocke que le hash du PIN (``Student.pin_hash``). Les PIN en clair
-ne sont disponibles qu'au moment de l'import : ils sont écrits dans un fichier
-d'identifiants distinct, à distribuer puis supprimer par le professeur.
+La V2 n'utilise plus de PIN : chaque élève reçoit un identifiant lisible et
+unique (``PRENOM-NOMnn``, ex. ``MARIE-DUP32``), suffisant pour rejoindre une
+séance. L'identifiant est visible sur l'écran de pré-séance.
 """
 
 import csv
 import json
-import secrets
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-from django.contrib.auth.hashers import make_password
 from django.db import transaction
 
 from qcm.models import Groupe, Student
@@ -182,56 +180,50 @@ def valider_lignes(lignes: list[LigneEleve], groupe: Groupe) -> None:
         raise ErreurImportParticipants(erreurs)
 
 
-def _initiale(texte: str) -> str:
+def _normaliser_texte(texte: str) -> str:
     normalise = (
         unicodedata.normalize("NFKD", texte)
         .encode("ascii", "ignore")
         .decode("ascii")
     )
-    normalise = "".join(caractere for caractere in normalise if caractere.isalnum())
-    return (normalise[:1] or "X").upper()
+    return "".join(
+        caractere for caractere in normalise if caractere.isalnum()
+    ).upper()
 
 
 def generer_code_etudiant(nom: str, prenom: str) -> str:
-    """Identifiant lisible (initiales + 4 chiffres), unique globalement."""
-    base = f"{_initiale(prenom)}{_initiale(nom)}"
-    for _ in range(1000):
-        code = f"{base}{secrets.randbelow(10000):04d}"
+    """Identifiant lisible ``PRENOM-NOMnn`` (ex. ``MARIE-DUP32``), unique."""
+    prenom_normalise = _normaliser_texte(prenom)[:20] or "ELEVE"
+    nom_normalise = _normaliser_texte(nom)[:3] or "XXX"
+    base = f"{prenom_normalise}-{nom_normalise}"
+    for numero in range(100):
+        code = f"{base}{numero:02d}"
         if not Student.objects.filter(code_etudiant=code).exists():
             return code
     raise ErreurImportParticipants(
-        "Impossible de générer un identifiant unique ; réessayez."
+        "Impossible de générer un identifiant unique pour "
+        f"{prenom} {nom} : trop d'homonymes."
     )
-
-
-def generer_pin() -> str:
-    """PIN à 6 chiffres (donc dans la plage 4 à 6 demandée), non trivial."""
-    while True:
-        pin = f"{secrets.randbelow(1_000_000):06d}"
-        if len(set(pin)) > 1:
-            return pin
 
 
 def importer_participants(
     lignes: list[LigneEleve],
     groupe: Groupe,
 ) -> list[dict]:
-    """Crée les élèves en une transaction et retourne les identifiants en clair.
+    """Crée les élèves en une transaction et retourne leurs identifiants.
 
-    Chaque entrée contient ``nom``, ``prenom``, ``code_etudiant`` et ``pin``.
-    En cas d'erreur, aucune ligne n'est créée.
+    Chaque entrée contient ``nom``, ``prenom`` et ``code_etudiant``. En cas
+    d'erreur, aucune ligne n'est créée.
     """
     valider_lignes(lignes, groupe)
     resultats = []
     with transaction.atomic():
         for ligne in lignes:
             code = generer_code_etudiant(ligne.nom, ligne.prenom)
-            pin = generer_pin()
             Student.objects.create(
                 nom=ligne.nom,
                 prenom=ligne.prenom,
                 code_etudiant=code,
-                pin_hash=make_password(pin),
                 groupe=groupe,
             )
             resultats.append(
@@ -239,50 +231,6 @@ def importer_participants(
                     "nom": ligne.nom,
                     "prenom": ligne.prenom,
                     "code_etudiant": code,
-                    "pin": pin,
                 }
             )
     return resultats
-
-
-def ecrire_credentials(chemin: Path, groupe: Groupe, eleves: list[dict]) -> None:
-    """Écrit le fichier des identifiants en clair (hors base, à supprimer)."""
-    chemin = Path(chemin)
-    chemin.parent.mkdir(parents=True, exist_ok=True)
-    donnees = {"groupe": groupe.nom, "eleves": eleves}
-    chemin.write_text(
-        json.dumps(donnees, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-
-
-def lire_credentials(chemin: Path) -> dict:
-    """Relit le fichier d'identifiants produit par l'import."""
-    try:
-        donnees = json.loads(Path(chemin).read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise ErreurImportParticipants(
-            f"Fichier d'identifiants introuvable : {chemin}. Les PIN ne sont "
-            "stockés que hachés : utilisez --regenerer pour en créer de nouveaux."
-        ) from exc
-    except OSError as exc:
-        raise ErreurImportParticipants(
-            f"Impossible de lire {chemin} : {exc}"
-        ) from exc
-    except json.JSONDecodeError as exc:
-        raise ErreurImportParticipants(
-            f"Fichier d'identifiants invalide : {exc.msg}"
-        ) from exc
-
-    if not isinstance(donnees, dict) or not isinstance(donnees.get("eleves"), list):
-        raise ErreurImportParticipants(
-            "Fichier d'identifiants invalide : clé « eleves » manquante."
-        )
-    for index, eleve in enumerate(donnees["eleves"], start=1):
-        if not isinstance(eleve, dict) or not all(
-            cle in eleve for cle in ("nom", "prenom", "code_etudiant", "pin")
-        ):
-            raise ErreurImportParticipants(
-                f"Fichier d'identifiants invalide : entrée {index} incomplète."
-            )
-    return donnees

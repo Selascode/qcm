@@ -1,15 +1,27 @@
 """Pages HTML : accueil, connexion élève, tableau et création de séance."""
 
+import csv
+import io
+import json
+import tempfile
 import uuid
+from pathlib import Path
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from qcm import services
 from qcm.couleurs import infos_couleur
+from qcm.import_participants import (
+    ErreurImportParticipants,
+    charger_fichier,
+    importer_participants,
+)
 from qcm.models import Groupe, Participant, Quiz, Session
 from qcm.resultats import calculer_resultats
 
@@ -23,6 +35,28 @@ def _session_prof(request, code: str) -> Session:
     if session.quiz.proprietaire_id != request.user.pk:
         raise PermissionDenied("Cette séance ne vous appartient pas.")
     return session
+
+
+def _cartes_etape(session: Session) -> tuple[list, int]:
+    """Cartes de la question courante et nombre de réponses de l'étape."""
+    cartes = []
+    nb_reponses_etape = 0
+    if session.statut in (Session.STATUT_EN_COURS, Session.STATUT_PAUSE):
+        questions = services.questions_de_l_etape(
+            session, session.etape_courante
+        )
+        if questions:
+            compteurs = services.compter_reponses_par_question(session, questions)
+            cartes = [
+                {
+                    "question": question,
+                    "couleur": infos_couleur(question.couleur_slot),
+                    "nb_reponses": compteurs.get(question.pk, 0),
+                }
+                for question in questions
+            ]
+            nb_reponses_etape = sum(compteurs.values())
+    return cartes, nb_reponses_etape
 
 
 def accueil(request):
@@ -58,24 +92,7 @@ def tableau(request, code: str):
     )
     session = services.avancer_si_necessaire(session)
 
-    cartes = []
-    nb_reponses_etape = 0
-    if session.statut in (Session.STATUT_EN_COURS, Session.STATUT_PAUSE):
-        etape = session.quiz.steps.filter(numero=session.etape_courante).first()
-        if etape is not None:
-            questions = list(
-                etape.questions.prefetch_related("choices").order_by("ordre", "id")
-            )
-            compteurs = services.compter_reponses_par_question(session, questions)
-            cartes = [
-                {
-                    "question": question,
-                    "couleur": infos_couleur(question.couleur_slot),
-                    "nb_reponses": compteurs.get(question.pk, 0),
-                }
-                for question in questions
-            ]
-            nb_reponses_etape = sum(compteurs.values())
+    cartes, nb_reponses_etape = _cartes_etape(session)
 
     url_rejoindre = None
     qr_svg = None
@@ -86,7 +103,7 @@ def tableau(request, code: str):
     contexte = {
         "session": session,
         "cartes": cartes,
-        "nb_etapes": session.quiz.steps.count(),
+        "nb_etapes": services.nombre_etapes(session),
         "nb_participants": session.participants.count(),
         "nb_reponses": session.answers.count(),
         "nb_reponses_etape": nb_reponses_etape,
@@ -182,3 +199,115 @@ def reinitialiser_appareil(request, code: str, participant_id: int):
         f"Appareil réinitialisé pour {participant}. L'élève doit se reconnecter.",
     )
     return redirect("qcm:participants", code=session.code_session)
+
+
+@login_required
+def presentation(request, code: str):
+    """Vue plein écran : questions, timer et compteurs, sans aucun contrôle."""
+    session = _session_prof(request, code)
+    session = services.avancer_si_necessaire(session)
+    cartes, nb_reponses_etape = _cartes_etape(session)
+    return render(
+        request,
+        "qcm/presentation.html",
+        {
+            "session": session,
+            "cartes": cartes,
+            "nb_etapes": services.nombre_etapes(session),
+            "nb_participants": session.participants.count(),
+            "nb_reponses": session.answers.count(),
+            "nb_reponses_etape": nb_reponses_etape,
+            "temps_restant_s": services.temps_restant_s(session),
+        },
+    )
+
+
+@login_required
+def importer_eleves(request, groupe_id: int):
+    """Import CSV/JSON d'élèves dans un groupe, avec export des identifiants."""
+    groupe = get_object_or_404(
+        Groupe.objects.select_related("proprietaire"),
+        pk=groupe_id,
+        proprietaire=request.user,
+    )
+    resultats = []
+    if request.method == "POST":
+        fichier = request.FILES.get("fichier")
+        if fichier is None:
+            messages.error(request, "Choisissez un fichier CSV ou JSON.")
+        else:
+            suffixe = Path(fichier.name).suffix.lower()
+            if suffixe not in (".csv", ".json"):
+                messages.error(
+                    request,
+                    "Format non reconnu : utilisez un fichier .csv ou .json.",
+                )
+            else:
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=suffixe
+                ) as tampon:
+                    for bloc in fichier.chunks():
+                        tampon.write(bloc)
+                    chemin = Path(tampon.name)
+                try:
+                    lignes = charger_fichier(chemin)
+                    resultats = importer_participants(lignes, groupe)
+                    messages.success(
+                        request,
+                        f"{len(resultats)} élève(s) importé(s) dans "
+                        f"« {groupe.nom} ».",
+                    )
+                except ErreurImportParticipants as exc:
+                    for message in exc.messages:
+                        messages.error(request, message)
+                finally:
+                    chemin.unlink(missing_ok=True)
+    return render(
+        request,
+        "qcm/importer_eleves.html",
+        {"groupe": groupe, "resultats": resultats},
+    )
+
+
+@login_required
+def exporter_identifiants(request, groupe_id: int, format: str):
+    """Export CSV/JSON des identifiants d'un groupe (sans PIN)."""
+    groupe = get_object_or_404(Groupe, pk=groupe_id, proprietaire=request.user)
+    eleves = groupe.etudiants.order_by("nom", "prenom")
+    if format == "json":
+        contenu = json.dumps(
+            [
+                {
+                    "nom": student.nom,
+                    "prenom": student.prenom,
+                    "code_etudiant": student.code_etudiant,
+                }
+                for student in eleves
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        content_type = "application/json"
+        extension = "json"
+    elif format == "csv":
+        tampon = io.StringIO()
+        redacteur = csv.writer(tampon)
+        redacteur.writerow(["nom", "prenom", "code_etudiant"])
+        for student in eleves:
+            redacteur.writerow(
+                [student.nom, student.prenom, student.code_etudiant]
+            )
+        contenu = tampon.getvalue()
+        content_type = "text/csv"
+        extension = "csv"
+    else:
+        raise Http404("Format d'export inconnu.")
+
+    reponse = HttpResponse(
+        contenu,
+        content_type=f"{content_type}; charset=utf-8",
+    )
+    reponse["Content-Disposition"] = (
+        f'attachment; filename="identifiants_{slugify(groupe.nom)}.{extension}"'
+    )
+    return reponse

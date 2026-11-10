@@ -107,13 +107,24 @@ class ChoiceAdmin(admin.ModelAdmin):
 
 @admin.register(Groupe)
 class GroupeAdmin(admin.ModelAdmin):
-    list_display = ("nom", "proprietaire", "nb_etudiants", "date_creation")
+    list_display = (
+        "nom",
+        "proprietaire",
+        "nb_etudiants",
+        "lien_import",
+        "date_creation",
+    )
     list_filter = ("proprietaire",)
     search_fields = ("nom",)
 
     @admin.display(description="Élèves")
     def nb_etudiants(self, obj: Groupe) -> int:
         return obj.etudiants.count()
+
+    @admin.display(description="Import")
+    def lien_import(self, obj: Groupe) -> str:
+        url = reverse("qcm:importer_eleves", args=[obj.pk])
+        return format_html('<a href="{}">Importer</a>', url)
 
 
 @admin.register(Student)

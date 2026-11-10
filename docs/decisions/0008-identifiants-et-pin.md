@@ -1,42 +1,52 @@
-# 0008 — Identifiants élèves, PIN hachés et liste imprimable
+# 0008 — Identifiants élèves lisibles, sans PIN
+
+> Cette version remplace l'ADR initial qui prévoyait un PIN haché et une liste
+> imprimable de PIN. La revue du 2026-11-10 a retiré le PIN du périmètre V2.
 
 ## Contexte
 
-La V2 doit authentifier chaque élève par un identifiant et un PIN à 4–6
-chiffres, tout en produisant une liste imprimable remise individuellement.
-Stocker le PIN en clair en base est exclu. Mais `liste_identifiants` doit
-afficher le PIN : un hash seul ne permet pas de le retrouver.
+La V2 doit identifier chaque élève pour l'authentifier à une séance. Un premier
+projet utilisait un identifiant + un PIN haché, imposant une feuille de PIN à
+distribuer et un mécanisme de secours (`--regenerer`). La revue a simplifié :
+l'identifiant est lisible et affiché sur l'écran de pré-séance ; un second
+secret n'apporte pas de sécurité réelle dans une salle de classe (l'élève est
+devant le professeur) et complique l'import et la distribution.
 
 ## Options
 
-1. **Stocker le PIN en clair** dans `Student` : simple, mais contraire à la
-   règle « hash, pas de stockage en clair ».
-2. **Ne stocker que le hash et régénérer les PIN à chaque impression** :
-   chaque impression invalide les feuilles précédentes, ce qui est dangereux
-   une fois les feuilles distribuées.
-3. **Stocker le hash en base et écrire les PIN en clair dans un fichier
-   d'identifiants au moment de l'import**, à distribuer puis supprimer. Le
-   fichier est ignoré par Git ; la base ne contient que le hash.
+1. **PIN haché + liste imprimable** : plus de secret, mais stockage/diffusion
+   de PIN à gérer, commande `liste_identifiants`, régénération, risque de
+   perte.
+2. **Identifiant lisible seul** : `PRENOM-NOMnn` (ex. `MARIE-DUP32`), unique,
+   visible sur l'écran de pré-séance ; un seul appareil actif ; le professeur
+   peut réinitialiser l'appareil.
+3. **Compte élève complet avec mot de passe** : hors périmètre V2 (pas de
+   récupération de mot de passe, pas de compte en libre-service).
 
 ## Décision
 
-Option 3.
+Option 2.
 
-- `import_participants` génère identifiant + PIN, stocke
-  `make_password(pin)` dans `Student.pin_hash` et écrit
-  `identifiants_<groupe>.json` (chemin surchargeable par `--identifiants`).
-- `liste_identifiants` relit ce fichier et produit une feuille HTML
-  imprimable ; elle ne peut pas retrouver un PIN perdu.
-- `liste_identifiants --regenerer` régénère tous les PIN du groupe, met à jour
-  les hashes et réécrit le fichier. C'est la seule procédure de secours si le
-  fichier est perdu ; elle invalide les anciennes feuilles.
-- Le fichier `identifiants_*` est ajouté à `.gitignore` et doit être supprimé
-  après impression.
+- L'import génère un identifiant lisible et unique
+  (`qcm/import_participants.py::generer_code_etudiant`) ; `Student.pin_hash`
+  est supprimé par la migration `0006`.
+- `/api/rejoindre/` n'accepte que `code_session` + `code_etudiant` pour une
+  séance avec groupe ; la démo `groupe = NULL` reste anonyme.
+- Une nouvelle connexion avec le même identifiant écrase `jeton_appareil` ;
+  l'ancien appareil reçoit `401`. Le professeur peut réinitialiser l'appareil
+  depuis la page participants.
+- L'export CSV/JSON des identifiants (sans PIN) est fourni par l'interface
+  d'import `/groupe/<id>/importer-eleves/` ; la commande `liste_identifiants`
+  (PIN) est retirée.
 
 ## Conséquences
 
-- La base ne permet pas de reconstituer un PIN ; c'est voulu.
-- La liste imprimable est le seul document contenant les PIN en clair. Sa
-  manipulation est de la responsabilité du professeur.
-- Le bouton « Réinitialiser » de la page participants ne change pas le PIN :
-  il régénère seulement le jeton d'appareil (`Participant.jeton_appareil`).
+- Plus de feuille de PIN à distribuer ni à supprimer : la liste des
+  identifiants est le document de référence.
+- L'identifiant n'est pas un secret ; il est visible sur l'écran de
+  pré-séance. La protection repose sur le remplacement d'appareil et la
+  réinitialisation par le professeur, pas sur un secret partagé.
+- La migration supprime une colonne qui n'est plus utilisée ; aucune donnée
+  métier (réponses, groupes) n'est touchée.
+- L'ADR 0008 initial est remplacé ; le README, le JOURNAL et les tests sont
+  alignés sur l'absence de PIN.

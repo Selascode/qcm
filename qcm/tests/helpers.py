@@ -4,7 +4,6 @@ import json
 import uuid
 from datetime import timedelta
 
-from django.contrib.auth.hashers import make_password
 from django.utils import timezone
 
 from qcm.models import Groupe, Session, Student
@@ -123,25 +122,22 @@ def creer_eleve(
     nom: str = "Dupont",
     prenom: str = "Marie",
     code_etudiant: str = "MD0001",
-    pin: str = "123456",
 ) -> Student:
     return Student.objects.create(
         nom=nom,
         prenom=prenom,
         code_etudiant=code_etudiant,
-        pin_hash=make_password(pin),
         groupe=groupe,
     )
 
 
-def rejoindre_eleve(client, session: Session, code_etudiant: str, pin: str):
+def rejoindre_eleve(client, session: Session, code_etudiant: str):
     return client.post(
         "/api/rejoindre/",
         data=json.dumps(
             {
                 "code": session.code_session,
                 "code_etudiant": code_etudiant,
-                "pin": pin,
             }
         ),
         content_type="application/json",
