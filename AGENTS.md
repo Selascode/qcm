@@ -17,8 +17,6 @@ Un ticket = une branche = un périmètre fermé. Si le ticket est ambigu, poser 
 
 ## 1. Sécurité — règles non négociables
 
-Ces règles sont la raison d'être du projet. Une violation = le ticket est refusé, même si les tests passent.
-
 1. **Aucun énoncé, texte de choix ou champ `est_correct` ne doit jamais partir vers un téléphone élève.**
    - Les endpoints élèves (`/etat/`, `/repondre/`, etc.) ne renvoient que : couleur de la question, nombre de choix, temps restant, accusé de réception, statut de la réponse.
    - Tout nouveau champ ajouté à une réponse JSON destinée à l'élève doit être justifié dans le plan.
@@ -31,58 +29,42 @@ Ces règles sont la raison d'être du projet. Une violation = le ticket est refu
 
 ## 2. Stack figée
 
-Ne pas ajouter, retirer ou remplacer une brique sans accord explicite dans l'Issue.
-
 - **Backend** : Django + Python, **ORM uniquement** (pas de SQL brut).
-- **Front** : templates Django + **HTMX** + JavaScript simple. Pas de framework JS (React, Vue, Svelte…).
+- **Front** : templates Django + **HTMX** + JavaScript simple. Pas de framework JS.
 - **Formules** : KaTeX (côté tableau uniquement).
-- **Base** : SQLite en mode WAL pour le dev/démo ; PostgreSQL pour l'école. Le code doit rester compatible ORM avec les deux.
-- **Temps réel** : **polling** d'un endpoint léger `/etat/` toutes les 1 à 2 s avec délai aléatoire. **Pas de SSE, pas de Channels, pas de WebSockets** sauf si un test de charge prouve que le polling ne suffit pas (et dans ce cas, en parler d'abord).
+- **Base** : SQLite en mode WAL pour le dev/démo ; PostgreSQL pour l'école. ORM compatible avec les deux.
+- **Temps réel** : **polling** d'un endpoint léger `/etat/` toutes les 1 à 2 s avec délai aléatoire. **Pas de SSE, pas de Channels, pas de WebSockets** sauf si un test de charge prouve que le polling ne suffit pas.
 - **Tests** : `pytest` + `pytest-django`.
-- **Style** : `ruff` (config par défaut du dépôt).
+- **Style** : `ruff` (config par défaut).
 
-Toute nouvelle dépendance doit être :
-- justifiée dans le plan du ticket (pourquoi la stdlib ou l'existant ne suffit pas) ;
-- ajoutée à `requirements.txt` avec une version épinglée ;
-- signalée dans le résumé de la PR.
+Toute nouvelle dépendance doit être justifiée, ajoutée à `requirements.txt` avec version épinglée, et signalée dans la PR.
 
 ---
 
 ## 3. Modèle de données — invariants
 
-Le schéma de référence est dans `docs/ARCHITECTURE.md` (section « Modèle de données »). Points à ne pas casser :
-
-- `Answer` a une **contrainte unique `(participant, question)`**. Ne jamais la retirer.
-- `Answer` porte `source` (`app` / `papier`) et `id_client` (anti-doublon). Ne pas les supprimer.
-- `Session.ends_at` est la **seule** référence temporelle. Pause et ajout de temps modifient `ends_at`.
-- `Participant.graine_mélange` et `Participant.couleur_assignée` sont **persistés** : on doit pouvoir reconstituer l'ordre des boutons et la couleur d'un élève après redémarrage.
-- `Question.uid` est unique **par quiz**, pas globalement.
-- La durée est portée par `Step`, pas par `Question`.
-
-Toute migration qui touche à ces invariants doit être justifiée dans la PR.
+- **Banque de questions (`QuestionSet`)** : Une `Question` appartient à un `QuestionSet` (réutilisable). Un `Quiz` sélectionne des `Questions` dans la banque. L'algorithme de répartition pioche dans cette sélection.
+- **Identifiants sans PIN** : Le modèle `Student` n'a pas de `pin_hash`. Il a un `code_etudiant` unique (ex: `MARIE-DUP00`). L'authentification se fait uniquement par ce code.
+- **Couleurs déterministes** : `Participant.couleur_assignée` n'est **pas** aléatoire. Elle est assignée de manière cyclique (Round-Robin) à la connexion (le 1er a la couleur 1, le 2ème la 2, etc.) pour minimiser les doublons.
+- `Answer` a une **contrainte unique `(participant, question)`**.
+- `Answer` porte `source` (`app` / `papier`) et `id_client` (anti-doublon).
+- `Session.ends_at` est la **seule** référence temporelle.
+- `Participant.graine_mélange` est **persisté** pour l'ordre des boutons.
+- `Question.uid` est unique **par quiz** (ou par `QuestionSet` en V3), pas globalement.
+- La durée est portée par l'étape générée, pas par `Question`.
 
 ---
 
 ## 4. Barème — fonction pure, configurable, testée
 
 Le barème ne doit **jamais** être stocké en base ni dupliqué dans une vue.
-Il est calculé par des fonctions pures (par exemple `notation.py::note_question(...)` et
-`notation.py::note_seance(...)`) qui reçoivent **explicitement** leur configuration en
-paramètre (pas de constante globale, pas de lecture de la base dans la fonction).
+Il est calculé par des fonctions pures (`notation.py::note_question` et `note_seance`) qui reçoivent leur configuration en paramètre.
 
 ### Règles métier (non négociables)
-
-1. **Pénalité optionnelle** : le professeur peut activer ou désactiver la pénalité pour
-   les mauvaises réponses. Quand elle est désactivée, une mauvaise réponse ne retire
-   aucun point (elle contribue à `0`, pas à `−1`).
-2. **La note d'une question peut être négative.** Elle est bornée entre
-   `−facteur_penalite` et `1`. Aucun plancher à `0` au niveau de la question.
-3. **Seule la note finale de la séance est plafonnée à 0.** La somme des notes de
-   questions est calculée sans plancher, puis `note_finale = max(0, somme)`. Un élève
-   peut donc avoir `−0.5` sur une question et une note finale `0`.
-4. **Pondération partielle** :
-   `note_question = (bonnes cochées − facteur_penalite × mauvaises cochées) / nombre de bonnes réponses`,
-   bornée entre `−facteur_penalite` et `1`.
+1. **Pénalité optionnelle** : activable/désactivable par le professeur (0 point retiré si désactivée).
+2. **Note par question négative possible** : bornée entre `−facteur_penalite` et `1`.
+3. **Note finale plafonnée à 0** : `max(0, somme_des_notes)`.
+4. **Pondération partielle** : `(bonnes cochées − facteur_penalite × mauvaises cochées) / nombre de bonnes réponses`.
 5. **Pas de réponse** = `0` pour cette question.
 
 ### Signatures attendues
@@ -102,62 +84,61 @@ def note_seance(
 ) -> float:
     """Note finale d'une séance : max(0, somme). Ne lit pas la base."""
 
+```
 ---
 
 ## 5. Processus par ticket
 
-1. **Lire** le ticket, `docs/SPEC.md` et la section concernée de `docs/ARCHITECTURE.md`.
-2. **Écrire un plan court** dans l'Issue (objectif, fichiers touchés, critères d'acceptation, hors périmètre).
-3. **Créer la branche** `agent/<nom-du-ticket>` (le worktree est déjà créé par `dsh-superagent`).
-4. **Écrire ou compléter les tests d'abord** quand c'est pertinent (notation, timer, refus tardif, absence d'énoncé).
-5. **Implémenter** en petits diffs relisibles (< 10 minutes de lecture).
+1. **Lire** le ticket et la documentation.
+2. **Écrire un plan court** dans l'Issue.
+3. **Créer la branche** `agent/<nom-du-ticket>`.
+4. **Écrire ou compléter les tests d'abord** (notation, timer, refus tardif, absence d'énoncé).
+5. **Implémenter** en petits diffs relisibles.
 6. **Lancer** `pytest` et `ruff`. Ne pas pousser si ça échoue.
-7. **Ouvrir la PR** avec : résumé, critères d'acceptation cochés, points ouverts, et mention explicite de toute dépendance ajoutée.
-8. **Ne jamais merger** : la fusion est manuelle, faite par un humain (`Selascode`). Pas d'auto-merge, pas de `--force-push` sur une branche partagée.
+7. **Ouvrir la PR** avec : résumé, critères d'acceptation, mention des dépendances.
+8. **Ne jamais merger** : la fusion est manuelle (`Selascode`).
 
 ---
 
 ## 6. Documentation obligatoire
 
-- **`JOURNAL.md`** : une entrée par session (date, objectif, prompt utilisé, résultat, problème, décision). C'est la matière du rapport PAO, pas un bonus.
-- **`docs/decisions/NNNN-titre.md`** : pour tout choix structurant (contexte, options, décision, conséquences). Le format ADR est attendu.
-- **`prompts/`** : un fichier par prompt clé, avec le résultat (succès **et** échecs). Les échecs sont valorisés, pas cachés.
-- Une fonctionnalité terminée = un tag Git (ex. `v0.1`, `v1.0`).
+- **`JOURNAL.md`** : une entrée par session (objectif, prompt, résultat, décision).
+- **`docs/decisions/NNNN-titre.md`** : pour tout choix structurant (ADR).
+- **`prompts/`** : un fichier par prompt clé (succès et échecs).
+- Une fonctionnalité terminée = un tag Git.
 
 ---
 
 ## 7. Ce que l'agent ne doit pas faire
 
-- Créer une fonctionnalité non demandée dans le ticket (« tant qu'on y est, j'ai ajouté… »).
+- Créer une fonctionnalité non demandée dans le ticket.
 - Réécrire un fichier entier pour corriger trois lignes.
 - Changer le barème, le schéma de `Answer`, ou la politique de polling sans ticket dédié.
-- Ajouter un `print` de debug dans le code poussé.
+- Ajouter un `print` de debug.
 - Modifier `AGENTS.md`, `docs/SPEC.md` ou `docs/ROADMAP.md` sans instruction explicite.
-- Toucher à la configuration `dsh-superagent` (profil, policy, executor) : ce n'est pas le périmètre du code applicatif.
-- Utiliser `git push --force` sur `main` ou sur une branche déjà en PR.
+- Toucher à la configuration `dsh-superagent`.
+- Utiliser `git push --force` sur `main` ou une branche en PR.
 
 ---
 
-## 8. Critères de « terminé » par version (rappel)
+## 8. Critères de « terminé » par version
 
 | Version | Critère mesurable |
 | :--- | :--- |
-| **V0** | 3 téléphones rejoignent, répondent, le prof voit les réponses, une réponse tardive est refusée. |
-| **V1** | Séance de 5 étapes avec redémarrage serveur au milieu, aucune réponse perdue. |
-| **V2** | Calcul des notes couvert par des tests ; taux de réussite par question exact. |
-| **V3** | Une feuille papier saisie + une séance appli fusionnent sans doublon. |
-| **V4** | Test de charge à 100 clients simulés sans erreur ; guide remis au professeur. |
-
-Un ticket qui ne fait pas avancer un de ces critères est probablement hors périmètre : le signaler.
+| **V0** | 3 téléphones rejoignent, répondent, réponse tardive refusée. |
+| **V1** | Séance de 5 étapes avec redémarrage serveur, aucune réponse perdue. |
+| **V2** | Notes testées ; taux de réussite exact ; pas de PIN ; import web. |
+| **V3** | Banque de questions (sets) fonctionnelle ; rotation des couleurs Round-Robin sans doublon. |
+| **V4** | Test de charge à 100 clients sans erreur ; guide remis. |
 
 ---
 
 ## 9. En cas de blocage
 
-- Reformuler le problème dans l'Issue avant de coder au hasard.
-- Si une correction s'enlise (2 tentatives échouées), **revenir en arrière** (`git reset` sur la branche) et proposer une autre approche dans l'Issue.
-- Ne pas empiler les correctifs sur un code douteux : préférer un petit revert à une grosse rustine.
+- Reformuler le problème dans l'Issue.
+- Si une correction s'enlise (2 échecs), **revenir en arrière** (`git reset`) et proposer une autre approche.
+- Ne pas empiler les correctifs sur un code douteux.
 
 ---
 
-*Dernière mise à jour : à dater à chaque modification.*
+*Dernière mise à jour : 2026-11-11 (Banque de questions, sans PIN, couleurs Round-Robin).*

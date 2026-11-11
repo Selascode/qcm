@@ -74,89 +74,51 @@ Objectif : une séance complète, avec redémarrage serveur au milieu, sans pert
 - [ ] **Tests Import** : ajouter des tests d'intégration pour l'import (CSV/JSON) avec un vrai groupe.
 ---
 
-## V2 — Comptes, groupes et notes (en cours)
+## V2 — Comptes élèves, Import et Corrections (En cours / À merger)
 
-Objectif : une séance exploitable avec de vrais élèves identifiés, rattachés à un groupe, et des notes calculées et vérifiées par des tests.
-
-### Groupes et élèves
-- [ ] Modèle `Groupe` et rattachement de `Student` et `Session`.
-- [ ] **Suppression du PIN** : retirer le champ `pin_hash` du modèle `Student` et de l'import.
-- [ ] **Identifiant lisible** : générer un code du type `PRENOM-NOM` (ex: `MARIE-DUP`).
-- [ ] Interface web d'import (CSV/JSON).
-- [ ] Écran pré-séance : liste des élèves avec identifiant visible (Statut gris/vert en direct).
-
-### Authentification élève
-- [ ] `/api/rejoindre/` accepte uniquement `code_etudiant` (plus de PIN).
-- [ ] Un seul appareil actif par élève.
-- [ ] Refus d'un PIN faux avec message générique (pas d'oracle sur l'identifiant).
-- [ ] Un seul appareil actif par élève : `Participant.jeton_appareil` régénéré à chaque connexion ; ancien appareil → `401`.
-- [ ] Vue Participants : bouton « Réinitialiser » pour libérer l'appareil d'un élève.
-- [ ] Tableau prof : liste des participants connectés, identifiant affiché discrètement, heure de dernière activité.
-
-### Notation
-- [ ] Champ `Quiz.penalite_active` (booléen, défaut `True`) et `Quiz.facteur_penalite` (float, défaut `1.0`, contrainte > 0).
-- [ ] Fonction pure `note_question(choix, question, *, penalite_active, facteur_penalite)` — peut retourner une valeur négative (cf. `AGENTS.md` §4).
-- [ ] Fonction pure `note_seance(notes_questions)` — plancher `0` sur la somme.
-- [ ] Tests `note_question` : 1 bonne / 1 cochée ; 2 bonnes / 1 cochée ; 2 bonnes / 1 bonne + 1 mauvaise **pénalité activée** ; idem **pénalité désactivée** ; 2 bonnes / 2 bonnes ; aucune réponse ; 1 bonne / 1 mauvaise → `−1.0` ; bornage à `−facteur_penalite`.
-- [ ] Tests `note_seance` : somme positive ; somme nulle ; somme négative → `0.0` ; liste vide → `0.0`.
-- [ ] Admin Django : case « Pénaliser les mauvaises réponses » + champ « Facteur de pénalité », avec aide.
-- [ ] Vue `/resultats/<session>/` : note totale par élève (avec plancher `0`) et taux de réussite par question. Protégée par auth + propriétaire. **Note non stockée** (calcul à la volée).
-- [ ] Total de séance par élève affiché avec le plancher `0`.
-- [ ] Taux de réussite par question (exact, testé).
-
-### Accessibilité
-- [ ] Symboles ● ▲ ■ ◆ ★ en plus des couleurs (téléphone et tableau).
-- [ ] Police Atkinson Hyperlegible sur le téléphone, fichier local (pas de CDN, pour ne pas casser hors ligne).
-- [ ] Contraste élevé (WCAG AA) et zones tactiles ≥ 44×44 px.
-
-### Sécurité et tests V2
-- [ ] Le test anti-fuite reste vert après l'ajout de l'authentification élève.
-- [ ] Test : un appareil qui perd la main reçoit `401` et ne peut plus répondre.
-- [ ] Test : un PIN faux est refusé avec le même message qu'un identifiant inconnu.
-- [ ] Test : l'import participants est transactionnel (échec → aucune ligne créée).
-
-- [ ] **Critère de fin** (AGENTS.md §8) : calcul des notes couvert par des tests ; taux de réussite par question exact.
+- [x] Modèle `Groupe` et rattachement de `Session` et `Student`.
+- [x] **Sécurité Accueil** : retirer « Créer une séance » pour les anonymes.
+- [x] **Admin** : renommer `Student` -> "Élève (Base)" et `Participant` -> "Élève (Session)".
+- [x] **Sans PIN** : suppression de `pin_hash`, génération d'identifiant lisible (`MARIE-DUP`).
+- [x] **Import Web** : page `/groupe/<id>/importer-eleves/` avec upload CSV/JSON.
+- [x] **Écran pré-séance** : liste des élèves avec statut vert en direct.
+- [x] **Mode Présentation** : vue plein écran sans boutons de contrôle.
+- [x] **Algorithme de répartition** : génération des étapes par paquets de 4.
 
 ---
 
-## V3 — Papier et exports
+## Dette V2 (Corrections urgentes avant V3)
 
-### Papier
-- [ ] PDF personnalisé par élève (WeasyPrint), calqué sur les QCM INSA
-- [ ] QR code par feuille (élève + QCM)
-- [ ] Saisie manuelle des réponses papier dans l'admin
-- [ ] Import CSV des réponses papier
-- [ ] Fusion papier / appli, question par question (l'appli prime)
-- [ ] Marquage `source = papier` dans les exports
+- [ ] **Admin Groupe** : ajouter un `InlineModelAdmin` pour voir et modifier les élèves directement depuis la page du Groupe.
+- [ ] **Couleurs Round-Robin** : remplacer le hasard par une attribution cyclique (1, 2, 3, 4, 1, 2...) pour éviter que 2 élèves aient la même couleur (et donc la même question).
+- [ ] **Tests Round-Robin** : vérifier que 4 connexions donnent 4 couleurs distinctes.
 
-### Exports et administration
-- [ ] Export CSV : note par élève (sélection de la session dans l'interface)
-- [ ] Export CSV : détail par question
-- [ ] Export CSV : taux de réussite par question
-- [ ] Export PDF : mêmes trois vues
-- [ ] Statistiques élèves paramétrables (visibles après la séance si activé)
-- [ ] **Import PDF de la liste des participants** — repoussé de la V2 à la V3 : l'extraction de texte et le parsing de tableaux sont coûteux et fragiles, alors que le CSV et le JSON couvrent le besoin. À rouvrir si le professeur fournit un gabarit PDF stable.
+---
 
-### Sets de questions (chantier séparé)
-- [ ] Fusion `Quiz` / `Question` en « sets de questions » réutilisables, importables en JSON depuis l'application. Chantier structurant (refonte du modèle), à traiter dans un ticket dédié après la V3.
+## V3 — Banque de questions (Sets) et Exports
 
-### Option
-- [ ] Réponses tardives horodatées avant la fin, signalées « à valider » au prof
+### Banque de questions (`QuestionSet`)
+- [ ] Créer le modèle `QuestionSet` (nom, propriétaire).
+- [ ] Data migration pour migrer les questions existantes dans un set par défaut.
+- [ ] Modifier le modèle `Quiz` (ManyToMany vers `Question` au lieu de `Step` direct).
+- [ ] Interface : menu "Questions" qui liste les Sets, puis les questions du set.
+- [ ] Interface : import de questions (JSON/CSV) directement depuis l'admin (comme pour les élèves).
+- [ ] Adapter `generer_etapes()` pour piocher dans les questions du Quiz sélectionné.
 
-- [ ] **Critère de fin** : une feuille papier saisie + une séance appli fusionnent sans doublon.
+### Papier et Exports
+- [ ] PDF personnalisé par élève (WeasyPrint).
+- [ ] Saisie manuelle des réponses papier dans l'admin.
+- [ ] Fusion papier / appli (l'appli prime).
+- [ ] Export CSV : notes par élève, détail par question, taux de réussite.
 
 ---
 
 ## V4 — Finitions
 
-- [ ] Statistiques de classe au tableau en fin d'étape (option)
-- [ ] Mode serveur local (portable + Wi-Fi dédié), documenté
-- [ ] Test de charge à 100 clients simulés (script reproductible)
-- [ ] Commande de purge des noms et réponses (fin d'année)
-- [ ] Guide professeur finalisé (installation, création QCM, lancement séance, exports)
-- [ ] Guide élève (rejoindre, répondre, se reconnecter)
-- [ ] Documentation finale : `JOURNAL.md` consolidé, ADR, prompts clés
-- [ ] **Critère de fin** : test de charge à 100 sans erreur ; guide complet remis au professeur.
+- [ ] Statistiques de classe au tableau en fin d'étape (option).
+- [ ] Mode serveur local (portable + Wi-Fi dédié).
+- [ ] Test de charge à 100 clients simulés.
+- [ ] Guide professeur finalisé.
 
 ---
 
@@ -164,7 +126,6 @@ Objectif : une séance exploitable avec de vrais élèves identifiés, rattaché
 
 | Version | Date | Tag Git | Statut |
 | :--- | :--- | :--- | :--- |
-| V0 | 2026-11-09 | — | Fusionnée dans V1 |
-| V1 | 2026-11-09 | `v1.0` (à créer) | Fusionnée, 103 tests verts |
-| V1 + dette | 2026-11-09 | — | Fusionnée |
-| V2 | — | — | En cours |
+| V0 / V1 | 2026-11-09 | `v1.0` | Fusionnée |
+| V2 | 2026-11-11 | `v2.0` (à venir) | PR en cours de revue (189 tests) |
+| V3 | — | — | À planifier (Sets, Round-Robin, Admin) |
