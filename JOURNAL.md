@@ -376,3 +376,47 @@ affiché… » de la page participants reste un reste de la V2 sans PIN, non
 modifié dans ce correctif ciblé.
 
 
+## 2026-11-11 — V3 : banque de questions, import et panier de sélection
+
+**Objectif.** Transformer les questions en banque réutilisable
+(`QuestionSet`), sélectionner les questions d'un QCM dans un panier ordonné,
+importer JSON/CSV et dériver les étapes virtuelles.
+
+**Prompt / demande.** Issue #7, plan de 8 lignes (commentaire `6803586456`)
+validé, puis précisions humaines (commentaire `6803752746`) : `Quiz.duree_s`
++ `Question.duree_s` (durée d'étape = question la plus longue) et interface
+« panier » sans widget M2M ; plan de 3 lignes (commentaire `6803790142`).
+
+**Réalisé.**
+
+- Modèles : `QuestionSet`, `Question.set` (uid unique par set),
+  `Quiz.questions` via `QuizQuestion.position`, `Quiz.duree_s`,
+  `Question.duree_s` ; suppression de `Step`, `Question.quiz`,
+  `Question.step` et `Question.couleur_slot`.
+- Migrations `0010` (schéma), `0011` (data) et `0012` (contraintes et
+  suppressions) : ensemble « Questions existantes » par professeur, ordre des
+  anciens QCM reconstruit, uid dupliqués suffixés `-<quiz_id>`, durées reprises.
+- Admin : `QuestionSetAdmin` (inline + « Importer »), `QuestionAdmin` par set,
+  page `/admin/qcm/quiz/<id>/selection/` groupée par ensemble avec cases à
+  cocher et « Ajouter au Quiz » (ordre conservé, doublons ignorés), inline de
+  la sélection avec suppression sur la page du QCM.
+- Import : module `import_questions.py`, JSON (racine liste acceptée, `etape`
+  ignoré) et CSV une ligne par choix ; vue `/ensemble/<id>/importer-questions/`
+  avec ensemble de destination et résumé ; commande `import_quiz` conservée.
+- Services/API/résultats : étapes virtuelles depuis `quiz.questions`, couleur =
+  position dans le paquet, durée d'étape = max(`Quiz.duree_s`, questions).
+- Exemples `examples/questions_demo.json` et `.csv`, README, ADR 0011.
+- Tests : migration, import JSON/CSV, panier/ordonnancement/retrait, scénario
+  5 questions de plusieurs ensembles + rotation, durées, non-régression V1/V2.
+
+**Vérifications.** `pytest` (216 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures avant/après dans `docs/screenshots/v3/`
+(avant = `905346d`, après = cette branche), même viewport 1280×900, thème
+clair.
+
+**Décisions.** ADR 0011. `QuestionSet` protégé, pas de réordonnancement manuel
+du panier (ajout en fin + retrait), `Quiz.duree_s` est un plancher. Les docs
+`SPEC.md`, `ARCHITECTURE.md` et `ROADMAP.md` ne sont pas modifiées (mise à jour
+humaine attendue).
+
+
