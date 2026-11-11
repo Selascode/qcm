@@ -14,15 +14,18 @@ from qcm.models import Groupe
 
 class Command(BaseCommand):
     help = (
-        "Importe des élèves (CSV nom,prenom ou JSON) dans un groupe et génère "
-        "leurs identifiants lisibles (sans PIN)."
+        "Importe des élèves (CSV nom,prenom,identifiant_insa? ou JSON) dans un "
+        "groupe et génère leurs identifiants lisibles (sans PIN)."
     )
 
     def add_arguments(self, parser) -> None:
         parser.add_argument(
             "fichier",
             type=Path,
-            help="Fichier .csv (en-tête nom,prenom) ou .json (liste d'objets).",
+            help=(
+                "Fichier .csv (en-tête nom,prenom et identifiant_insa "
+                "facultatif) ou .json (liste d'objets)."
+            ),
         )
         parser.add_argument(
             "--groupe",

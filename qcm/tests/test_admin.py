@@ -1,11 +1,15 @@
 """Parcours professeur dans l'admin : créer une séance, ouvrir le tableau."""
 
+import uuid
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
 from qcm.import_questions import importer_quiz
 from qcm.models import (
+    Answer,
+    Choice,
     Groupe,
     Participant,
     Question,
@@ -15,7 +19,7 @@ from qcm.models import (
     Session,
     Student,
 )
-from qcm.tests.helpers import donnees_quiz
+from qcm.tests.helpers import creer_eleve, donnees_quiz
 
 pytestmark = pytest.mark.django_db
 
@@ -276,3 +280,101 @@ def test_admin_ensemble_affiche_le_lien_d_import(client, proprietaire):
     assert reverse(
         "qcm:importer_questions", args=[question_set.pk]
     ) in page
+
+
+def test_admin_session_affiche_le_lien_resultats_selon_le_statut(
+    client, proprietaire
+):
+    quiz, _, _ = _quiz_avec_questions(proprietaire, "Q1")
+    session_finie = Session.objects.create(
+        quiz=quiz, statut=Session.STATUT_FINI
+    )
+    session_en_cours = Session.objects.create(
+        quiz=quiz, statut=Session.STATUT_EN_COURS
+    )
+    session_attente = Session.objects.create(
+        quiz=quiz, statut=Session.STATUT_ATTENTE
+    )
+    client.force_login(proprietaire)
+
+    contenu = client.get("/admin/qcm/session/").content.decode()
+
+    assert "Voir les résultats" in contenu
+    assert f"/resultats/{session_finie.code_session}/" in contenu
+    assert f"/resultats/{session_en_cours.code_session}/" in contenu
+    assert f"/resultats/{session_attente.code_session}/" not in contenu
+
+
+def test_admin_answer_add_papier_par_defaut(client, proprietaire, groupe):
+    quiz, _, (question,) = _quiz_avec_questions(proprietaire, "Q1")
+    QuizQuestion.objects.create(quiz=quiz, question=question, position=1)
+    Choice.objects.create(
+        question=question, lettre="A", texte="bonne", est_correct=True
+    )
+    session = Session.objects.create(quiz=quiz, groupe=groupe)
+    eleve = creer_eleve(groupe, nom="Dupont", prenom="Marie")
+    participant = Participant.objects.create(session=session, student=eleve)
+    client.force_login(proprietaire)
+
+    page = client.get("/admin/qcm/answer/add/").content.decode()
+    assert 'value="papier" selected' in page
+
+    reponse = client.post(
+        "/admin/qcm/answer/add/",
+        {
+            "participant": participant.pk,
+            "question": question.pk,
+            "choix_selectionnes": '["A"]',
+            "source": "papier",
+            "_save": "Enregistrer",
+        },
+    )
+
+    assert reponse.status_code == 302
+    answer = Answer.objects.get()
+    assert answer.source == Answer.SOURCE_PAPIER
+    assert answer.session_id == session.pk
+    assert answer.choix_selectionnes == ["A"]
+    assert answer.id_client is not None
+
+
+def test_admin_answer_refuse_le_papier_si_une_reponse_app_existe(
+    client, proprietaire, groupe
+):
+    quiz, _, (question,) = _quiz_avec_questions(proprietaire, "Q1")
+    QuizQuestion.objects.create(quiz=quiz, question=question, position=1)
+    Choice.objects.create(
+        question=question, lettre="A", texte="bonne", est_correct=True
+    )
+    Choice.objects.create(
+        question=question, lettre="B", texte="mauvaise", est_correct=False
+    )
+    session = Session.objects.create(quiz=quiz, groupe=groupe)
+    eleve = creer_eleve(groupe, nom="Dupont", prenom="Marie")
+    participant = Participant.objects.create(session=session, student=eleve)
+    Answer.objects.create(
+        session=session,
+        participant=participant,
+        question=question,
+        choix_selectionnes=["A"],
+        source=Answer.SOURCE_APP,
+        id_client=uuid.uuid4(),
+    )
+    client.force_login(proprietaire)
+
+    reponse = client.post(
+        "/admin/qcm/answer/add/",
+        {
+            "participant": participant.pk,
+            "question": question.pk,
+            "choix_selectionnes": '["B"]',
+            "source": "papier",
+            "_save": "Enregistrer",
+        },
+    )
+
+    assert reponse.status_code == 200
+    assert "elle prime" in reponse.content.decode()
+    answer = Answer.objects.get()
+    assert answer.source == Answer.SOURCE_APP
+    assert answer.choix_selectionnes == ["A"]

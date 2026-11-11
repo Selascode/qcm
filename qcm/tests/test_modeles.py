@@ -6,7 +6,7 @@ import pytest
 from django.db import IntegrityError, connection, transaction
 
 from qcm.import_questions import importer_quiz
-from qcm.models import Answer, Participant
+from qcm.models import Answer, Participant, Student
 from qcm.tests.helpers import creer_session, donnees_quiz
 
 pytestmark = pytest.mark.django_db
@@ -89,6 +89,41 @@ def test_id_client_unique_globalement(proprietaire):
             question=questions[1],
             choix_selectionnes=["A"],
             id_client=id_client,
+        )
+
+
+def test_identifiant_insa_optionnel_et_unique(groupe):
+    premier = Student.objects.create(
+        nom="Dupont",
+        prenom="Marie",
+        groupe=groupe,
+        identifiant_insa="INS-001",
+    )
+    sans_insa_1 = Student.objects.create(
+        nom="Martin", prenom="Paul", groupe=groupe
+    )
+    sans_insa_2 = Student.objects.create(
+        nom="Durand", prenom="Alice", groupe=groupe
+    )
+
+    assert premier.identifiant_insa == "INS-001"
+    assert sans_insa_1.identifiant_insa is None
+    assert sans_insa_2.identifiant_insa is None
+
+    vide = Student.objects.create(
+        nom="Petit",
+        prenom="Benoit",
+        groupe=groupe,
+        identifiant_insa="   ",
+    )
+    assert vide.identifiant_insa is None
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Student.objects.create(
+            nom="Autre",
+            prenom="Élève",
+            groupe=groupe,
+            identifiant_insa="INS-001",
         )
 
 

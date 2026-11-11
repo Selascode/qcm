@@ -40,10 +40,11 @@ web d'import et par la commande `manage.py import_participants`.
    dans la ligne du groupe. La page s'ouvre à
    `/groupe/<id>/importer-eleves/` ; l'`<id>` est le `pk` du groupe, visible
    dans l'URL de la fiche `/admin/qcm/groupe/<id>/change/`.
-5. Déposer `groupe_demo.csv` (en-tête `nom,prenom`) ou `groupe_demo.json`
-   (liste d'objets `{nom, prenom}`), puis « Importer ». La page affiche le
-   résumé et les identifiants générés ; les boutons « Télécharger CSV/JSON »
-   exportent la liste.
+5. Déposer `groupe_demo.csv` (en-tête `nom,prenom`, colonne facultative
+   `identifiant_insa`) ou `groupe_demo.json` (liste d'objets
+   `{nom, prenom, identifiant_insa?}`), puis « Importer ». La page affiche le
+   résumé, les identifiants générés et l'identifiant INSA s'il est fourni ; les
+   boutons « Télécharger CSV/JSON » exportent la liste.
 6. Seul le propriétaire du groupe peut ouvrir cette page : un autre professeur
    authentifié reçoit une 404, un visiteur anonyme est redirigé vers la
    connexion.

@@ -24,6 +24,15 @@
       <a class="bouton-secondaire" href="{% url 'qcm:participants' session.code_session %}">
         Participants
       </a>
+      <a class="bouton-secondaire" href="{% url 'qcm:saisie_papier' session.code_session %}">
+        Saisie papier
+      </a>
+      <a class="bouton-secondaire" href="{% url 'qcm:exporter_resultats_notes' session.code_session %}">
+        Export notes (CSV)
+      </a>
+      <a class="bouton-secondaire" href="{% url 'qcm:exporter_resultats_detail' session.code_session %}">
+        Export détail (CSV)
+      </a>
     </nav>
   </header>
 
@@ -31,6 +40,7 @@
     <h2>Notes par élève</h2>
     <p class="aide">
       La note d'une question peut être négative ; le total est plafonné à 0.
+      La note sur 20 est le total ramené à l'échelle du nombre de questions.
       Une case « — » signifie que l'élève n'a pas répondu à cette question.
     </p>
     <div class="table-scroll">
@@ -42,6 +52,7 @@
               <th title="{{ stat.question.enonce }}">{{ stat.question.uid }}</th>
             {% endfor %}
             <th>Total</th>
+            <th>Note /20</th>
           </tr>
         </thead>
         <tbody>
@@ -60,9 +71,10 @@
                 </td>
               {% endfor %}
               <td class="total"><strong>{{ ligne.total|floatformat:2 }}</strong></td>
+              <td class="total">{{ ligne.note_20|floatformat:2 }}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="{{ stats_questions|length|add:2 }}" class="table-vide">
+            <tr><td colspan="{{ stats_questions|length|add:3 }}" class="table-vide">
               Aucun participant pour le moment.
             </td></tr>
           {% endfor %}

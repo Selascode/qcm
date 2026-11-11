@@ -44,7 +44,22 @@ urlpatterns = [
         name="reinitialiser_appareil",
     ),
     path("session/<str:code>/", views.session_initiale, name="session_initiale"),
+    path(
+        "session/<str:code>/saisie-papier/",
+        views.saisie_papier,
+        name="saisie_papier",
+    ),
     path("resultats/<str:code>/", views.resultats, name="resultats"),
+    path(
+        "resultats/<str:code>/export/notes.csv",
+        views.exporter_resultats_notes,
+        name="exporter_resultats_notes",
+    ),
+    path(
+        "resultats/<str:code>/export/detail.csv",
+        views.exporter_resultats_detail,
+        name="exporter_resultats_detail",
+    ),
     path("api/rejoindre/", api.rejoindre, name="api_rejoindre"),
     path("api/etat/", api.etat_eleve, name="api_etat"),
     path("api/repondre/", api.repondre, name="api_repondre"),

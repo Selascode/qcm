@@ -168,3 +168,26 @@ def test_vue_resultats_anonyme_redirige(client, proprietaire, groupe):
     reponse = client.get(reverse("qcm:resultats", args=[session.code_session]))
 
     assert reponse.status_code == 302
+
+
+def test_note_sur_20_et_detail_des_lettres(proprietaire, groupe):
+    session, participant_marie, participant_paul = _preparer(
+        proprietaire, groupe
+    )
+
+    resultats = calculer_resultats(session)
+    par_participant = {
+        ligne["participant"].pk: ligne
+        for ligne in resultats["lignes_participants"]
+    }
+
+    assert resultats["nb_questions"] == 2
+    assert par_participant[participant_marie.pk]["note_20"] == pytest.approx(
+        15.0
+    )
+    assert par_participant[participant_paul.pk]["note_20"] == pytest.approx(
+        0.0
+    )
+    detail_marie = par_participant[participant_marie.pk]["notes"][0]
+    assert detail_marie["lettres"] == ["A"]
+    assert detail_marie["bonnes_lettres"] == ["A"]

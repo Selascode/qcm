@@ -420,3 +420,63 @@ du panier (ajout en fin + retrait), `Quiz.duree_s` est un plancher. Les docs
 humaine attendue).
 
 
+
+
+## 2026-11-11 — Fin V3 : identifiant INSA, résultats, papier et exports CSV
+
+**Objectif.** Terminer la V3 sur le périmètre de l'issue #9 : identifiant INSA
+facultatif, accès aux résultats depuis l'admin, saisie des copies papier et
+exports CSV exploitables dans Excel.
+
+**Prompt / demande.** Issue #9 ; plan de 8 points publié le 2026-11-11
+(commentaire `6805844438`) et validé sur la structure. Le même jour, ajout
+demandé (commentaire `6805958790`) : vue de saisie papier groupée
+`/session/<code>/saisie-papier/`, liaison rapide d'un élève par identifiant et
+import CSV de réponses papier. Plan de 3 lignes publié (commentaire
+`6805989205`) puis implémentation.
+
+**Réalisé.**
+
+- `Student.identifiant_insa` (`CharField(32, unique, null, blank)`), migration
+  `0013`, normalisation des valeurs vides en `NULL`, admin élève et inline du
+  groupe, import CSV/JSON avec colonne/clé facultative et refus des doublons.
+- Colonne « Résultats » dans `SessionAdmin` (lien pour les séances en cours ou
+  terminées), libellé « Voir les résultats » sur le tableau, et note /20 à côté
+  du total brut (plancher 0) sur la page des résultats.
+- `AnswerAdmin` en ajout seul : `source` initialisé à `papier`, séance déduite
+  du participant, `id_client` généré, validation refusant une réponse existante
+  (message « l'application prime »), question limitée au QCM de la séance et
+  lettres validées.
+- Vue `/session/<code>/saisie-papier/` (prof propriétaire) : liste des élèves
+  du groupe avec/sans participant, formulaire de toutes les questions (radio
+  pour les questions uniques, cases pour les multiples), création automatique
+  du `Participant`, verrouillage des réponses `app` et mise à jour des réponses
+  papier existantes. Recherche/liaison d'un élève par `code_etudiant` ou
+  `identifiant_insa`.
+- Import CSV papier `identifiant,uid_question,lettre_choisie` : validation
+  complète avant écriture, transaction unique, participants créés au besoin,
+  lignes ignorées si une réponse `app` existe, réponses papier mises à jour,
+  plusieurs lettres acceptées pour une question multiple.
+- Exports CSV notes et détail : `utf-8-sig` (BOM), séparateur virgule,
+  identifiant INSA sinon `code_etudiant`, note /20, une colonne par question
+  (uid) et une ligne par élève × question dans le détail.
+- Documentation : ADR 0012, README, exemple d'import, prompt de la session.
+- Captures avant/après dans `docs/screenshots/v3-fin/` (avant = `5a72da0`,
+  après = cette branche) : admin des séances, élèves, groupe, ajout de réponse,
+  page d'import, page des résultats, tableau et nouvelle saisie papier.
+
+**Vérifications.** `pytest` : 250 tests passés. `ruff check .`, `manage.py
+check`, `makemigrations --check` : OK. Captures Playwright sur deux instances
+réelles (avant/après), même viewport, thème clair.
+
+**Décisions.** ADR 0012. La route existante `/resultats/<code_session>/` est
+conservée plutôt que d'ajouter `/resultats/<session_id>/` : le code est déjà
+l'identifiant public utilisé par le tableau, les QR codes et les participants.
+Les questions multiples papier utilisent des cases à cocher (les radios ne
+permettent qu'une lettre) et le CSV papier accepte plusieurs lettres dans la
+cellule. L'identifiant INSA n'est pas utilisé pour la connexion élève.
+
+**Reste à faire / limites.** Le PDF personnalisé par élève (WeasyPrint) reste
+hors de ce ticket. La suppression d'une réponse papier existante n'est pas
+exposée dans la vue groupée (on peut la modifier). Revue humaine et fusion
+manuelle attendues (aucun auto-merge).

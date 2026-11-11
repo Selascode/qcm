@@ -1,5 +1,8 @@
 """Admin Django : banque de questions, sélection et consultation des QCM."""
 
+import uuid
+
+from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -264,7 +267,7 @@ class StudentInline(admin.TabularInline):
 
     model = Student
     extra = 1
-    fields = ("nom", "prenom", "code_etudiant")
+    fields = ("nom", "prenom", "code_etudiant", "identifiant_insa")
     readonly_fields = ("code_etudiant",)
     ordering = ("nom", "prenom")
     verbose_name = "Élève"
@@ -296,10 +299,22 @@ class GroupeAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ("nom", "prenom", "code_etudiant", "groupe")
+    list_display = (
+        "nom",
+        "prenom",
+        "code_etudiant",
+        "identifiant_insa",
+        "groupe",
+    )
     list_filter = ("groupe",)
-    search_fields = ("nom", "prenom", "code_etudiant")
-    fields = ("nom", "prenom", "code_etudiant", "groupe")
+    search_fields = ("nom", "prenom", "code_etudiant", "identifiant_insa")
+    fields = (
+        "nom",
+        "prenom",
+        "code_etudiant",
+        "identifiant_insa",
+        "groupe",
+    )
     readonly_fields = ("code_etudiant",)
     list_select_related = ("groupe",)
 
@@ -319,6 +334,7 @@ class SessionAdmin(admin.ModelAdmin):
         "etape_courante",
         "ends_at",
         "lien_tableau",
+        "lien_resultats",
     )
     list_filter = ("statut", "quiz", "groupe")
     search_fields = ("code_session", "quiz__titre")
@@ -346,6 +362,16 @@ class SessionAdmin(admin.ModelAdmin):
         url = reverse("qcm:tableau", args=[obj.code_session])
         return format_html('<a href="{}" target="_blank">Ouvrir</a>', url)
 
+    @admin.display(description="Résultats")
+    def lien_resultats(self, obj: Session):
+        if obj.statut not in (Session.STATUT_EN_COURS, Session.STATUT_FINI):
+            return "—"
+        url = reverse("qcm:resultats", args=[obj.code_session])
+        return format_html(
+            '<a href="{}">Voir les résultats</a>',
+            url,
+        )
+
 
 @admin.register(Participant)
 class ParticipantAdmin(admin.ModelAdmin):
@@ -365,6 +391,7 @@ class ParticipantAdmin(admin.ModelAdmin):
         "student__nom",
         "student__prenom",
         "student__code_etudiant",
+        "student__identifiant_insa",
     )
     list_select_related = ("student__groupe",)
 
@@ -381,8 +408,91 @@ class ParticipantAdmin(admin.ModelAdmin):
         return False
 
 
+class AnswerAdminForm(forms.ModelForm):
+    """Saisie manuelle d'une réponse papier, sans écraser une réponse app."""
+
+    class Meta:
+        model = Answer
+        fields = ("participant", "question", "choix_selectionnes", "source")
+
+    def clean(self):
+        cleaned = super().clean()
+        participant = cleaned.get("participant")
+        question = cleaned.get("question")
+        choix = cleaned.get("choix_selectionnes")
+
+        if participant and question:
+            existante = Answer.objects.filter(
+                participant=participant, question=question
+            )
+            if self.instance.pk:
+                existante = existante.exclude(pk=self.instance.pk)
+            reponse = existante.first()
+            if reponse is not None:
+                if reponse.source == Answer.SOURCE_APP:
+                    raise forms.ValidationError(
+                        "Une réponse de l'application existe déjà pour cet "
+                        "élève et cette question : elle prime."
+                    )
+                raise forms.ValidationError(
+                    "Une réponse existe déjà pour cet élève et cette question."
+                )
+            if not question.quiz_questions.filter(
+                quiz=participant.session.quiz
+            ).exists():
+                raise forms.ValidationError(
+                    "Cette question n'appartient pas au QCM de la séance de "
+                    "cet élève."
+                )
+
+        if choix is not None:
+            if (
+                not isinstance(choix, list)
+                or not choix
+                or any(not isinstance(lettre, str) for lettre in choix)
+            ):
+                raise forms.ValidationError(
+                    {
+                        "choix_selectionnes": (
+                            "Indiquez une liste non vide de lettres, par "
+                            'exemple ["A"].'
+                        )
+                    }
+                )
+            if len(set(choix)) != len(choix):
+                raise forms.ValidationError(
+                    {"choix_selectionnes": "Une lettre est présente deux fois."}
+                )
+            if question is not None:
+                lettres = set(
+                    question.choices.values_list("lettre", flat=True)
+                )
+                if not set(choix).issubset(lettres):
+                    raise forms.ValidationError(
+                        {
+                            "choix_selectionnes": (
+                                "Une lettre ne correspond pas aux choix de "
+                                "cette question."
+                            )
+                        }
+                    )
+                if (
+                    question.type == Question.TYPE_UNIQUE
+                    and len(choix) > 1
+                ):
+                    raise forms.ValidationError(
+                        {
+                            "choix_selectionnes": (
+                                "Cette question n'admet qu'un seul choix."
+                            )
+                        }
+                    )
+        return cleaned
+
+
 @admin.register(Answer)
 class AnswerAdmin(admin.ModelAdmin):
+    form = AnswerAdminForm
     list_display = (
         "participant",
         "question",
@@ -393,9 +503,34 @@ class AnswerAdmin(admin.ModelAdmin):
     )
     list_filter = ("source", "session")
     search_fields = ("participant__session__code_session", "question__uid")
+    fields = ("participant", "question", "choix_selectionnes", "source")
+
+    def get_changeform_initial_data(self, request) -> dict:
+        donnees = super().get_changeform_initial_data(request)
+        donnees.setdefault("source", Answer.SOURCE_PAPIER)
+        return donnees
 
     def has_add_permission(self, request) -> bool:
-        return False
+        return True
 
     def has_change_permission(self, request, obj=None) -> bool:
         return False
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if not request.user.is_superuser:
+            if db_field.name == "participant":
+                kwargs["queryset"] = Participant.objects.filter(
+                    session__quiz__proprietaire=request.user
+                )
+            elif db_field.name == "question":
+                kwargs["queryset"] = Question.objects.filter(
+                    set__proprietaire=request.user
+                )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def save_model(self, request, obj, form, change) -> None:
+        if not obj.id_client:
+            obj.id_client = uuid.uuid4()
+        if obj.participant_id and not obj.session_id:
+            obj.session_id = obj.participant.session_id
+        super().save_model(request, obj, form, change)

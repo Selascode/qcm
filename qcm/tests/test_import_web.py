@@ -120,3 +120,15 @@ def test_export_refuse_a_un_autre_professeur(
     )
 
     assert reponse.status_code == 404
+
+
+def test_import_web_csv_avec_identifiant_insa(client, proprietaire, groupe):
+    client.force_login(proprietaire)
+    contenu = b"nom,prenom,identifiant_insa\nDupont,Marie,INS-42\n"
+    fichier = SimpleUploadedFile("eleves.csv", contenu, content_type="text/csv")
+
+    reponse = client.post(_url(groupe), {"fichier": fichier})
+
+    assert reponse.status_code == 200
+    assert "INS-42" in reponse.content.decode()
+    assert Student.objects.get().identifiant_insa == "INS-42"

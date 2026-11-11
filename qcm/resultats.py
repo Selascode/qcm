@@ -9,21 +9,23 @@ from collections import defaultdict
 
 from qcm.models import Answer
 from qcm.notation import note_question, note_seance
+from qcm.services import questions_du_quiz
 
 
-def _questions_du_quiz(quiz) -> list:
+def _lettres_dans_l_ordre(question, choix) -> list[str]:
+    """Lettres de ``choix`` triées dans l'ordre d'affichage de la question."""
+    selection = set(choix or [])
     return [
-        ligne.question
-        for ligne in quiz.quiz_questions.select_related("question")
-        .prefetch_related("question__choices")
-        .order_by("position", "id")
+        choice.lettre
+        for choice in question.choices.all()
+        if choice.lettre in selection
     ]
 
 
 def calculer_resultats(session) -> dict:
     """Retourne les notes par participant et les statistiques par question."""
     quiz = session.quiz
-    questions = _questions_du_quiz(quiz)
+    questions = questions_du_quiz(quiz)
     participants = list(
         session.participants.select_related("student").order_by("id")
     )
@@ -55,13 +57,25 @@ def calculer_resultats(session) -> dict:
                     "note": note,
                     "repondu": answer is not None,
                     "choix": answer.choix_selectionnes if answer else [],
+                    "lettres": _lettres_dans_l_ordre(
+                        question, answer.choix_selectionnes if answer else []
+                    ),
+                    "bonnes_lettres": [
+                        choice.lettre
+                        for choice in question.choices.all()
+                        if choice.est_correct
+                    ],
                 }
             )
+        total = note_seance(notes)
         lignes_participants.append(
             {
                 "participant": participant,
                 "notes": detail,
-                "total": note_seance(notes),
+                "total": total,
+                "note_20": (
+                    total / len(questions) * 20 if questions else 0.0
+                ),
             }
         )
 
@@ -98,4 +112,5 @@ def calculer_resultats(session) -> dict:
         "lignes_participants": lignes_participants,
         "stats_questions": stats_questions,
         "nb_participants": len(participants),
+        "nb_questions": len(questions),
     }

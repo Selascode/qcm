@@ -170,3 +170,81 @@ def test_generer_code_etudiant_unique(groupe):
 
     second = module.generer_code_etudiant("Dupont", "Marie")
     assert second == "MARIE-DUP01"
+
+
+def test_import_csv_avec_identifiant_insa_optionnel(tmp_path, groupe):
+    chemin = _ecrire(
+        tmp_path / "eleves.csv",
+        "nom,prenom,identifiant_insa\n"
+        "Dupont,Marie,INS-42\n"
+        "Martin,Paul,\n",
+    )
+
+    _importer(chemin, groupe)
+
+    marie = Student.objects.get(nom="Dupont")
+    paul = Student.objects.get(nom="Martin")
+    assert marie.identifiant_insa == "INS-42"
+    assert paul.identifiant_insa is None
+
+
+def test_import_json_avec_identifiant_insa(tmp_path, groupe):
+    chemin = _ecrire(
+        tmp_path / "eleves.json",
+        json.dumps(
+            [
+                {"nom": "Durand", "prenom": "Alice", "identifiant_insa": "INS-A"},
+                {"nom": "Petit", "prenom": "Benoit"},
+            ]
+        ),
+    )
+
+    _importer(chemin, groupe)
+
+    assert Student.objects.get(nom="Durand").identifiant_insa == "INS-A"
+    assert Student.objects.get(nom="Petit").identifiant_insa is None
+
+
+def test_import_identifiant_insa_doublon_dans_le_fichier(tmp_path, groupe):
+    chemin = _ecrire(
+        tmp_path / "eleves.csv",
+        "nom,prenom,identifiant_insa\n"
+        "Dupont,Marie,INS-1\n"
+        "Martin,Paul,INS-1\n",
+    )
+
+    with pytest.raises(CommandError):
+        _importer(chemin, groupe)
+
+    assert Student.objects.count() == 0
+
+
+def test_import_identifiant_insa_deja_utilise(tmp_path, groupe):
+    from qcm.tests.helpers import creer_eleve
+
+    eleve = creer_eleve(groupe, nom="Dupont", prenom="Marie")
+    eleve.identifiant_insa = "INS-1"
+    eleve.save(update_fields=["identifiant_insa"])
+    chemin = _ecrire(
+        tmp_path / "eleves.csv",
+        "nom,prenom,identifiant_insa\nMartin,Paul,ins-1\n",
+    )
+
+    with pytest.raises(CommandError):
+        _importer(chemin, groupe)
+
+    assert Student.objects.count() == 1
+
+
+def test_import_identifiant_insa_trop_long(tmp_path, groupe):
+    chemin = _ecrire(
+        tmp_path / "eleves.csv",
+        "nom,prenom,identifiant_insa\nDupont,Marie,"
+        + "X" * 33
+        + "\n",
+    )
+
+    with pytest.raises(CommandError):
+        _importer(chemin, groupe)
+
+    assert Student.objects.count() == 0
