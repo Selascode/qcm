@@ -3,12 +3,14 @@
 import json
 
 import pytest
+from django.urls import reverse
 
 from qcm.import_json import importer_quiz
 from qcm.models import Participant, Session
 from qcm.tests.helpers import (
     creer_eleve,
     creer_groupe,
+    demarrer,
     donnees_quiz,
     etat,
     rejoindre_eleve,
@@ -89,24 +91,68 @@ def test_un_seul_appareil_actif(client, groupe, session_groupe):
     creer_eleve(groupe, code_etudiant="MD0001")
 
     premier = rejoindre_eleve(client, session_groupe, "MD0001")
-    jeton_ancien = premier.json()["jeton"]
+    jeton_premier = premier.json()["jeton"]
     second = rejoindre_eleve(client, session_groupe, "MD0001")
-    jeton_nouveau = second.json()["jeton"]
 
+    assert second.status_code == 409
+    assert second.json()["raison"] == "deja_connecte"
+    assert "jeton" not in second.json()
     assert Participant.objects.count() == 1
-    assert jeton_ancien != jeton_nouveau
-    assert etat(client, jeton_ancien).status_code == 401
-    assert etat(client, jeton_nouveau).status_code == 200
+    assert etat(client, jeton_premier).status_code == 200
 
 
-def test_ancien_appareil_ne_peut_plus_repondre(client, groupe, session_groupe):
+def test_reconnexion_meme_jeton_garde_le_participant(client, groupe, session_groupe):
     creer_eleve(groupe, code_etudiant="MD0001")
-    jeton_ancien = rejoindre_eleve(client, session_groupe, "MD0001").json()["jeton"]
-    rejoindre_eleve(client, session_groupe, "MD0001")
+    premier = rejoindre_eleve(client, session_groupe, "MD0001")
+    jeton = premier.json()["jeton"]
 
-    reponse = repondre(client, jeton_ancien, "E1Q1", ["A"])
+    second = rejoindre_eleve(client, session_groupe, "MD0001", jeton=jeton)
 
-    assert reponse.status_code == 401
+    assert second.status_code == 200
+    assert second.json()["jeton"] == jeton
+    assert second.json()["participant_id"] == premier.json()["participant_id"]
+    assert Participant.objects.count() == 1
+    assert etat(client, jeton).status_code == 200
+
+
+def test_autre_appareil_ne_peut_pas_piloter_le_premier(client, groupe, session_groupe):
+    creer_eleve(groupe, code_etudiant="MD0001")
+    demarrer(session_groupe)
+    jeton = rejoindre_eleve(client, session_groupe, "MD0001").json()["jeton"]
+
+    second = rejoindre_eleve(client, session_groupe, "MD0001")
+
+    assert second.status_code == 409
+    assert repondre(client, jeton, "E1Q1", ["A"]).status_code == 200
+
+
+def test_reset_prof_libere_lappareil(client, proprietaire, groupe, session_groupe):
+    creer_eleve(groupe, code_etudiant="MD0001")
+    premier = rejoindre_eleve(client, session_groupe, "MD0001")
+    jeton_initial = premier.json()["jeton"]
+    participant = Participant.objects.get(session=session_groupe)
+
+    client.force_login(proprietaire)
+    reponse = client.post(
+        reverse(
+            "qcm:reinitialiser_appareil",
+            args=[session_groupe.code_session, participant.pk],
+        )
+    )
+
+    assert reponse.status_code == 302
+    participant.refresh_from_db()
+    assert participant.jeton_appareil is None
+    assert etat(client, jeton_initial).status_code == 401
+
+    nouveau = rejoindre_eleve(client, session_groupe, "MD0001")
+
+    assert nouveau.status_code == 200
+    jeton_nouveau = nouveau.json()["jeton"]
+    assert jeton_nouveau != jeton_initial
+    assert Participant.objects.count() == 1
+    assert etat(client, jeton_nouveau).status_code == 200
+    assert etat(client, jeton_initial).status_code == 401
 
 
 def test_seance_libre_reste_anonyme(client, proprietaire):
@@ -165,13 +211,11 @@ def test_couleurs_round_robin_et_reconnexion(client, groupe, session_groupe):
         for index in range(1, 6)
     ]
 
-    for etudiant in etudiants[:4]:
-        assert (
-            rejoindre_eleve(
-                client, session_groupe, etudiant.code_etudiant
-            ).status_code
-            == 200
-        )
+    for index, etudiant in enumerate(etudiants[:4]):
+        reponse = rejoindre_eleve(client, session_groupe, etudiant.code_etudiant)
+        assert reponse.status_code == 200
+        if index == 0:
+            jeton_premier = reponse.json()["jeton"]
 
     participants = list(
         Participant.objects.filter(session=session_groupe).order_by("id")
@@ -193,7 +237,12 @@ def test_couleurs_round_robin_et_reconnexion(client, groupe, session_groupe):
     assert cinquieme.couleur_assignee == 1
 
     premier = Participant.objects.get(student=etudiants[0])
-    rejoindre_eleve(client, session_groupe, etudiants[0].code_etudiant)
+    assert (
+        rejoindre_eleve(
+            client, session_groupe, etudiants[0].code_etudiant, jeton=jeton_premier
+        ).status_code
+        == 200
+    )
     premier.refresh_from_db()
     assert premier.couleur_assignee == 1
     assert Participant.objects.filter(session=session_groupe).count() == 5

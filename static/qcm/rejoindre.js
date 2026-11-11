@@ -26,6 +26,8 @@
         return;
       }
       corps.code_etudiant = identifiant;
+      const jeton = localStorage.getItem(cleJeton);
+      if (jeton) corps.jeton = jeton;
     } else {
       corps.jeton = localStorage.getItem(cleJeton);
     }
@@ -44,6 +46,9 @@
         } else if (donnees.raison === "identifiant_inconnu") {
           message.textContent =
             "Identifiant inconnu. Vérifiez l'écran de pré-séance.";
+        } else if (donnees.raison === "deja_connecte") {
+          message.textContent =
+            "Identifiant déjà connecté sur un autre appareil. Demandez au professeur de réinitialiser votre appareil.";
         } else {
           message.textContent = "Connexion impossible.";
         }

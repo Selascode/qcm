@@ -416,6 +416,8 @@ class Participant(models.Model):
         default=uuid.uuid4,
         unique=True,
         editable=False,
+        null=True,
+        blank=True,
     )
     derniere_activite = models.DateTimeField(
         "Dernière activité",

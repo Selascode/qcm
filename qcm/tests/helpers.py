@@ -131,15 +131,21 @@ def creer_eleve(
     )
 
 
-def rejoindre_eleve(client, session: Session, code_etudiant: str):
+def rejoindre_eleve(
+    client,
+    session: Session,
+    code_etudiant: str,
+    jeton: str | None = None,
+):
+    corps = {
+        "code": session.code_session,
+        "code_etudiant": code_etudiant,
+    }
+    if jeton is not None:
+        corps["jeton"] = jeton
     return client.post(
         "/api/rejoindre/",
-        data=json.dumps(
-            {
-                "code": session.code_session,
-                "code_etudiant": code_etudiant,
-            }
-        ),
+        data=json.dumps(corps),
         content_type="application/json",
     )
 

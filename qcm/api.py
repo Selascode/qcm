@@ -69,6 +69,16 @@ def _reponse_participant(session: Session, participant: Participant) -> JsonResp
     )
 
 
+def _jeton_fourni(donnees) -> uuid.UUID | None:
+    jeton_brut = donnees.get("jeton")
+    if not jeton_brut:
+        return None
+    try:
+        return uuid.UUID(str(jeton_brut))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
 def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
     """Connexion d'un élève identifié : code de session + identifiant."""
     code_etudiant = str(donnees.get("code_etudiant") or "").strip()
@@ -82,6 +92,7 @@ def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
     if student is None:
         return _erreur("identifiant_inconnu", 404)
 
+    jeton_fourni = _jeton_fourni(donnees)
     maintenant = timezone.now()
     with transaction.atomic():
         # Verrou de session : deux connexions simultanées ne prennent pas la
@@ -106,17 +117,29 @@ def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
                     session=session,
                     student=student,
                 )
+                if (
+                    participant.jeton_appareil is not None
+                    and participant.jeton_appareil != jeton_fourni
+                ):
+                    return _erreur("deja_connecte", 409)
+                participant.derniere_activite = maintenant
+                participant.save(update_fields=["derniere_activite"])
+        else:
+            if participant.jeton_appareil is not None:
+                # La première connexion est propriétaire : seul le même
+                # appareil (jeton identique) peut se reconnecter.
+                if participant.jeton_appareil != jeton_fourni:
+                    return _erreur("deja_connecte", 409)
+                participant.derniere_activite = maintenant
+                participant.save(update_fields=["derniere_activite"])
+            else:
+                # Appareil libéré par le professeur : la prochaine
+                # connexion récupère un nouveau jeton.
                 participant.jeton_appareil = uuid.uuid4()
                 participant.derniere_activite = maintenant
                 participant.save(
                     update_fields=["jeton_appareil", "derniere_activite"]
                 )
-        else:
-            # Un seul appareil actif : l'ancien jeton ne répond plus (401).
-            # La couleur initiale du Participant est conservée.
-            participant.jeton_appareil = uuid.uuid4()
-            participant.derniere_activite = maintenant
-            participant.save(update_fields=["jeton_appareil", "derniere_activite"])
 
     return _reponse_participant(session, participant)
 

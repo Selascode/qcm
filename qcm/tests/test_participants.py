@@ -169,7 +169,7 @@ def test_reinitialiser_l_appareil(
     client, proprietaire, groupe, session_groupe
 ):
     creer_eleve(groupe, code_etudiant="MD0001")
-    jeton_initial = _connexion(client, session_groupe).json()["jeton"]
+    _connexion(client, session_groupe)
     participant = Participant.objects.get(session=session_groupe)
     client.force_login(proprietaire)
 
@@ -182,7 +182,7 @@ def test_reinitialiser_l_appareil(
 
     assert reponse.status_code == 302
     participant.refresh_from_db()
-    assert str(participant.jeton_appareil) != jeton_initial
+    assert participant.jeton_appareil is None
 
 
 def test_reinitialiser_refuse_a_un_autre_professeur(

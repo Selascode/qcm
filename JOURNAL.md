@@ -293,4 +293,44 @@ lancer l'implémentation ».
 `tirer_couleur` reste importable uniquement pour l'historique des migrations.
 SPEC/ARCHITECTURE/ROADMAP ne sont pas modifiés (consigne).
 
+## 2026-11-11 — Sécurité : première connexion propriétaire
+
+**Objectif.** Empêcher un second onglet/appareil de prendre la session d'un
+élève déjà connecté.
+
+**Prompt / demande.** PR #6, commentaire du 2026-11-11 « avant de merge …
+Un élève peut ouvrir un autre onglet et se connecter à la place d'un autre. » ;
+plan de 6 lignes (commentaire `6802027534`) validé par « Parfait tu peux
+lancer le fix ».
+
+**Réalisé.**
+
+- `_rejoindre_groupe` : le `jeton_appareil` existant n'est plus remplacé ;
+  reconnexion acceptée seulement si le jeton fourni correspond (même
+  appareil), sinon `409 deja_connecte` sans jeton ; le premier appareil reste
+  valide.
+- `jeton_appareil` nullable (migration `0008`) ; `reinitialiser_appareil` le
+  passe à `NULL` ; l'ancien jeton reçoit 401 ; le prochain join attribue un
+  nouveau jeton ; le `Participant` et ses réponses sont conservés.
+- Client : le join groupe envoie le jeton stocké (`qcm.jeton.<code>`) et
+  affiche le message dédié ; la page participants garde son bouton
+  « Réinitialiser ».
+- Tests : `test_un_seul_appareil_actif`,
+  `test_reconnexion_meme_jeton_garde_le_participant`,
+  `test_autre_appareil_ne_peut_pas_piloter_le_premier`,
+  `test_reset_prof_libere_lappareil`, `test_reinitialiser_l_appareil` ;
+  `test_couleurs_round_robin_et_reconnexion` adapté.
+
+**Vérifications.** `pytest` (194 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures : `docs/screenshots/securite-prise-controle/`
+(join 409, page participants reset).
+
+**Décisions.** ADR 0009. L'identifiant reste public et une course à la toute
+première connexion reste possible sans secret ; on empêche le vol d'une
+session active, le professeur récupère via reset ; pas de PIN réintroduit.
+SPEC/ARCHITECTURE/ROADMAP non modifiés (à mettre à jour par l'humain :
+« nouvel appareil déconnecte l'ancien »). Le texte « Le PIN n'est jamais
+affiché… » de la page participants est un reste de la V2 sans PIN ; non
+modifié dans ce correctif ciblé, à traiter séparément.
+
 

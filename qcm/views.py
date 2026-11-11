@@ -4,7 +4,6 @@ import csv
 import io
 import json
 import tempfile
-import uuid
 from pathlib import Path
 
 from django.contrib import messages
@@ -192,11 +191,11 @@ def reinitialiser_appareil(request, code: str, participant_id: int):
         pk=participant_id,
         session=session,
     )
-    participant.jeton_appareil = uuid.uuid4()
+    participant.jeton_appareil = None
     participant.save(update_fields=["jeton_appareil"])
     messages.success(
         request,
-        f"Appareil réinitialisé pour {participant}. L'élève doit se reconnecter.",
+        f"Appareil libéré pour {participant}. L'élève doit se reconnecter.",
     )
     return redirect("qcm:participants", code=session.code_session)
 
