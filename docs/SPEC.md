@@ -116,7 +116,7 @@ Hyperlegible, contraste WCAG AA, zones tactiles ≥ 44x44px.
 - **Écran pré-séance (Contrôle visuel)** : Page dédiée affichant la liste complète du
   groupe (Nom, Prénom, Identifiant). Les élèves passent au vert en direct à la connexion
   (polling). Le professeur peut ainsi vérifier qui est absent ou connecté.
-
+- En plus de l'identifiant de connexion généré (code_etudiant), un élève peut avoir un identifiant_insa optionnel (fourni par l'école). Ce champ est utilisé pour les exports de notes vers les outils de l'INSA, mais n'est pas utilisé pour la connexion à l'application.
 ---
 
 ## 7. Architecture technique (résumé — détail dans `ARCHITECTURE.md`)
