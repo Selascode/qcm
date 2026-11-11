@@ -110,7 +110,8 @@ Objectif : une séance complète, avec redémarrage serveur au milieu, sans pert
 - [ ] Saisie manuelle des réponses papier dans l'admin.
 - [ ] Fusion papier / appli (l'appli prime).
 - [ ] Export CSV : notes par élève, détail par question, taux de réussite.
-
+- [ ] Champ Student.identifiant_insa (optionnel).
+- [ ] Bouton "Voir les résultats" dans la liste des séances (admin) et sur le tableau.
 ---
 
 ## V4 — Finitions
