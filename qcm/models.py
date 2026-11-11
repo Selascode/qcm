@@ -1,4 +1,4 @@
-"""Modèle de données du QCM (V1).
+"""Modèle de données du QCM (V2).
 
 Invariants respectés (AGENTS.md §3) :
 - ``Answer`` a une contrainte unique ``(participant, question)`` ;
@@ -7,9 +7,13 @@ Invariants respectés (AGENTS.md §3) :
 - ``Participant.couleur_assignee`` et ``Participant.graine_melange`` sont persistés ;
 - ``Question.uid`` est unique par quiz ;
 - la durée est portée par ``Step``, pas par ``Question``.
+
+V2 ajoute les groupes, les élèves identifiés (``Student``) et le barème
+configurable par QCM. ``Session.groupe`` reste nullable pour la démo.
 """
 
 import secrets
+import unicodedata
 import uuid
 
 from django.conf import settings
@@ -29,11 +33,36 @@ def generer_code_session() -> str:
 
 
 def tirer_couleur() -> int:
+    """Ancien tirage aléatoire, conservé pour la migration 0001.
+
+    La couleur réelle est désormais attribuée en Round-Robin à la connexion
+    (``services.prochaine_couleur``) ; ce helper n'est plus utilisé par le
+    modèle mais reste importable par les migrations historiques.
+    """
     return secrets.randbelow(NB_COULEURS) + 1
 
 
 def tirer_graine() -> int:
     return secrets.randbits(32)
+
+
+def _normaliser_texte(texte: str) -> str:
+    normalise = (
+        unicodedata.normalize("NFKD", texte)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    return "".join(
+        caractere for caractere in normalise if caractere.isalnum()
+    ).upper()
+
+
+def valider_facteur_penalite(valeur: float) -> None:
+    """Le facteur de pénalité doit être strictement positif."""
+    if valeur is None or valeur <= 0:
+        raise ValidationError(
+            "Le facteur de pénalité doit être strictement positif."
+        )
 
 
 class Quiz(models.Model):
@@ -43,6 +72,23 @@ class Quiz(models.Model):
         on_delete=models.CASCADE,
         related_name="quiz",
         verbose_name="Propriétaire",
+    )
+    penalite_active = models.BooleanField(
+        "Pénaliser les mauvaises réponses",
+        default=True,
+        help_text=(
+            "Si cette case est décochée, une mauvaise réponse ne retire aucun "
+            "point (elle contribue à 0)."
+        ),
+    )
+    facteur_penalite = models.FloatField(
+        "Facteur de pénalité",
+        default=1.0,
+        validators=[valider_facteur_penalite],
+        help_text=(
+            "Multiplicateur appliqué à chaque mauvaise réponse. Doit être "
+            "strictement supérieur à 0."
+        ),
     )
 
     class Meta:
@@ -204,6 +250,80 @@ class Choice(models.Model):
         return f"{self.lettre}. {self.texte[:60]}"
 
 
+class Groupe(models.Model):
+    """Groupe d'élèves rattaché à un professeur (ex. « ISIA4 »)."""
+
+    nom = models.CharField("Nom", max_length=100, unique=True)
+    proprietaire = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="groupes",
+        verbose_name="Propriétaire",
+    )
+    date_creation = models.DateTimeField("Date de création", auto_now_add=True)
+
+    class Meta:
+        ordering = ("nom",)
+        verbose_name = "Groupe"
+        verbose_name_plural = "Groupes"
+
+    def __str__(self) -> str:
+        return self.nom
+
+
+class Student(models.Model):
+    """Élève identifié, rattaché à un groupe et à un seul."""
+
+    nom = models.CharField("Nom", max_length=100)
+    prenom = models.CharField("Prénom", max_length=100)
+    code_etudiant = models.CharField(
+        "Identifiant",
+        max_length=32,
+        unique=True,
+        blank=True,
+    )
+    groupe = models.ForeignKey(
+        Groupe,
+        on_delete=models.PROTECT,
+        related_name="etudiants",
+        verbose_name="Groupe",
+    )
+
+    class Meta:
+        ordering = ("nom", "prenom")
+        verbose_name = "Élève (Base)"
+        verbose_name_plural = "Élèves (Base)"
+
+    @classmethod
+    def generer_code_etudiant(cls, nom: str, prenom: str) -> str:
+        """Identifiant lisible ``PRENOM-NOMnn`` (ex. ``MARIE-DUP32``), unique."""
+        prenom_normalise = _normaliser_texte(prenom)[:20] or "ELEVE"
+        nom_normalise = _normaliser_texte(nom)[:3] or "XXX"
+        base = f"{prenom_normalise}-{nom_normalise}"
+        for numero in range(100):
+            code = f"{base}{numero:02d}"
+            if not cls.objects.filter(code_etudiant=code).exists():
+                return code
+        for numero in range(10000):
+            code = f"{base}{numero:04d}"
+            if not cls.objects.filter(code_etudiant=code).exists():
+                return code
+        raise ValidationError(
+            "Impossible de générer un identifiant unique pour "
+            f"{prenom} {nom}."
+        )
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.code_etudiant:
+            self.code_etudiant = type(self).generer_code_etudiant(
+                self.nom, self.prenom
+            )
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.prenom} {self.nom} ({self.code_etudiant})"
+
+
 class Session(models.Model):
     STATUT_ATTENTE = "attente"
     STATUT_EN_COURS = "en_cours"
@@ -221,6 +341,18 @@ class Session(models.Model):
         on_delete=models.CASCADE,
         related_name="sessions",
         verbose_name="QCM",
+    )
+    groupe = models.ForeignKey(
+        Groupe,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sessions",
+        verbose_name="Groupe",
+        help_text=(
+            "Laisser vide pour une séance libre (démo) : les participants "
+            "apparaîtront à la connexion."
+        ),
     )
     code_session = models.CharField(
         "Code de session",
@@ -271,16 +403,37 @@ class Participant(models.Model):
         related_name="participants",
         verbose_name="Séance",
     )
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="participations",
+        verbose_name="Élève",
+    )
     jeton_appareil = models.UUIDField(
         "Jeton de l'appareil",
         default=uuid.uuid4,
         unique=True,
         editable=False,
+        null=True,
+        blank=True,
+    )
+    cookie_appareil = models.UUIDField(
+        "Cookie appareil",
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    derniere_activite = models.DateTimeField(
+        "Dernière activité",
+        null=True,
+        blank=True,
     )
     couleur_assignee = models.PositiveSmallIntegerField(
         "Couleur assignée",
         validators=[MinValueValidator(1), MaxValueValidator(NB_COULEURS)],
-        default=tirer_couleur,
+        default=1,
     )
     graine_melange = models.PositiveBigIntegerField(
         "Graine de mélange",
@@ -289,14 +442,28 @@ class Participant(models.Model):
 
     class Meta:
         ordering = ("id",)
-        verbose_name = "Élève"
-        verbose_name_plural = "Élèves"
+        verbose_name = "Élève (Session)"
+        verbose_name_plural = "Élèves (Session)"
+        constraints = (
+            models.UniqueConstraint(
+                fields=["session", "student"],
+                name="unique_participant_session_student",
+                condition=models.Q(student__isnull=False),
+            ),
+            models.UniqueConstraint(
+                fields=["session", "cookie_appareil"],
+                name="unique_cookie_appareil_par_session",
+                condition=models.Q(cookie_appareil__isnull=False),
+            ),
+        )
 
     @property
     def symbole(self) -> str:
         return COULEURS[self.couleur_assignee]["symbole"]
 
     def __str__(self) -> str:
+        if self.student_id:
+            return f"{self.student} — {self.symbole}"
         return f"Élève {self.pk} ({self.symbole})"
 
 

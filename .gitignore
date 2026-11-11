@@ -22,3 +22,6 @@ db.sqlite3-shm
 .test_db.sqlite3-wal
 .test_db.sqlite3-shm
 media/
+
+# Fichiers d'identifiants générés (PIN en clair, à supprimer après impression)
+identifiants_*

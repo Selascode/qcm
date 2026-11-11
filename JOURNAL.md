@@ -128,3 +128,251 @@ réponses / participants discrets en pied de page.
 **Décision.** La demande humaine la plus récente prime sur la mise en avant du
 compteur de salon d'attente : le compteur reste visible et rafraîchi, mais
 discret en pied de page.
+
+## 2026-11-09 — V2 : groupes, comptes élèves et notes
+
+**Objectif.** Implémenter la V2 du ticket #5 : groupes, import CSV/JSON,
+identifiants + PIN, un appareil actif, page participants, notation pure,
+résultats et accessibilité.
+
+**Prompt / demande.** Issue #5 « Implémente la V2 du projet QCM (comptes,
+groupes et notes) ». Demande « Lis l'issue pour la V2 et propose d'abord un
+plan (6-10 lignes) avant tout diff. Attends ma validation. » (comment
+`6739163139`) ; plan de 10 lignes publié (comment `6739211714`) puis validé
+par « Je valides tu peux démarer l'implémentation » (comment `6739251369`).
+
+**Réalisé.**
+
+- Modèles `Groupe`, `Student`, `Session.groupe`, `Participant.student` +
+  `derniere_activite`, et barème `Quiz.penalite_active` /
+  `Quiz.facteur_penalite` ; migrations nullable → vérification →
+  non-nullable pour `Student.groupe` (ADR `0006-session-groupe.md`).
+- `import_participants` (CSV/JSON, transactionnel, erreurs claires) et
+  `liste_identifiants` (feuille HTML imprimable). Les PIN ne sont stockés
+  qu'en hash ; le fichier d'identifiants en clair est ignoré par Git
+  (ADR `0007-import-pdf-v3.md` pour le report du PDF,
+  `0008-identifiants-et-pin.md` pour le stockage et la distribution).
+- Authentification élève identifiant + PIN, message générique sans oracle,
+  jeton régénéré à chaque connexion (ancien appareil → 401), bouton
+  « Réinitialiser » côté prof.
+- Page `/session/<code>/participants/` avec liste du groupe, statut
+  « Connecté » irréversible au polling 1–2 s, compteur X/Y, cas
+  `groupe = NULL` ; `/api/etat_participants/` sans PIN ni réponse.
+- `notation.py` (`note_question`, `note_seance`) et vue `/resultats/`
+  calculée à la volée (notes par élève avec plancher 0, taux de réussite par
+  question).
+- Accessibilité : symboles conservés sur téléphone et tableau, police Atkinson
+  Hyperlegible en local (SIL OFL), contraste AA vérifié par test, cibles
+  ≥ 44 px.
+
+**Vérifications.** `pytest` : 169 tests passés (103 V1 + 66 V2).
+`ruff check .`, `manage.py check`, `makemigrations --check` : OK. Captures
+avant/après dans `docs/screenshots/v2/`.
+
+**Problèmes / décisions.**
+
+- `Student` n'existait pas dans le code V1 malgré `ARCHITECTURE.md` : le
+  modèle est créé en V2 avec `Groupe`.
+- `Session.groupe = NULL` conserve la connexion anonyme de la démo ; une
+  séance avec groupe exige identifiant + PIN.
+- Le `★` de la spécification n'est pas utilisé : le modèle plafonne à quatre
+  questions par étape (quatre couleurs), un cinquième symbole n'aurait pas de
+  question correspondante au tableau. Les quatre symboles ● ▲ ■ ◆ sont
+  distincts et testés.
+- Le PIN en clair n'existe que dans le fichier produit à l'import, à
+  distribuer puis supprimer ; la base ne contient que `pin_hash`.
+
+## 2026-11-09 — Suivi PR #6 : URL du QR code configurable
+
+**Objectif.** Rendre l'URL encodée dans le QR code utilisable depuis un
+téléphone (hôte LAN configurable) et afficher le QR + le code sur le tableau
+en attente, pour que « Ouvrir » depuis l'admin soit directement utilisable.
+
+**Prompt / demande.** Commentaires PR #6 : « Corrige l'URL encodée dans le QR
+code de la page initiale de session… » puis « Parfait tu peux lancer le
+correctif, fait en sorte que lorsqu'on fait "ouvrir" au niveau du tableau on
+puisse avoir directement le qr code ainsi que le code qui s'affiche. »
+
+**Réalisé.**
+
+- `config/settings.py` : `QCM_LAN_HOST` lu depuis l'environnement (vide par
+  défaut).
+- `qcm/services.py` : helper `construire_url_rejoindre(request, session)` ;
+  `http://<QCM_LAN_HOST>/rejoindre/<code>/` si défini, sinon
+  `request.build_absolute_uri`.
+- `/session/<code>/` : utilise le helper, affiche « URL encodée : … », et
+  renvoie 403 à un autre professeur (au lieu de 404).
+- Tableau en attente : QR code + code + URL encodée, le QR n'étant affiché
+  qu'avant le démarrage.
+- README section « Accès depuis un téléphone » : exemple `QCM_LAN_HOST`,
+  rappel que `127.0.0.1` désigne le téléphone lui-même.
+- Tests : sans variable, avec `192.168.1.42:8000`, variable vide, 403, et QR
+  sur le tableau en attente.
+
+**Vérifications.** `pytest` (174 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures avant/après dans `docs/screenshots/qr-lan/`.
+
+**Décision.** Le QR est réaffiché sur le tableau uniquement pendant l'attente
+(mise à jour de l'ADR 0005) ; pendant la séance, il reste absent.
+
+## 2026-11-10 — V2 corrigée : identifiants sans PIN, import web, rotation par blocs
+
+**Objectif.** Appliquer les attendus V2 mis à jour : verbose names, import
+`nom__iexact`, suppression du PIN et identifiants lisibles, import web,
+rotation des questions par blocs, mode Présentation (timer à la même taille
+que le tableau de base) et écran de pré-séance.
+
+**Prompt / demande.** Issue #5, commentaire du 2026-11-10 « Implémente et
+corrige la V2… » ; plan de 8 lignes (commentaire `6763671700`) validé avec la
+précision « à la 5 le timer de l'écran présentation doit faire la même taille
+que celui sur la page de base ».
+
+**Réalisé.**
+
+- Admin : `Student` → « Élève (Base) », `Participant` → « Élève (Session) » ;
+  `import_participants` cherche le groupe avec `nom__iexact` ; tests d'import
+  CSV/JSON avec un vrai groupe.
+- Identifiants : suppression de `Student.pin_hash` (migration `0006`) ;
+  identifiant `PRENOM-NOMnn` ; `/api/rejoindre/` n'accepte que
+  `code_session` + `code_etudiant` ; un seul appareil (jeton écrasé) ;
+  formulaire/JS sans PIN ; `liste_identifiants` retiré.
+- Import web : `/groupe/<id>/importer-eleves/` (propriétaire), upload CSV/JSON,
+  résumé, export CSV/JSON des identifiants ; lien depuis l'admin Groupe.
+- Répartition : `qcm/services.py` converti en paquet ; helper
+  `repartition.py::generer_etapes` ; `Step` = paquet (pas de duplication de
+  `Question`) et étapes virtuelles ; couleur
+  `(couleur initiale + étape dans le paquet)` ; l'import JSON regroupe par 4 ;
+  tests N=10 → 10 étapes, N=5 → 5.
+- Mode Présentation : `/tableau/<code>/presentation/` (questions + timer +
+  compteurs, sans contrôles) ; timer de la même taille que le tableau de base ;
+  bouton sur le tableau.
+- Accueil : « Créer une séance » réservé aux profs (test) ; page participants
+  conforme (Nom, Prénom, Identifiant, Statut).
+- README et ADR 0008 alignés sur l'absence de PIN.
+
+**Vérifications.** `pytest` (189 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures avant/après à ajouter dans la PR.
+
+**Décisions.** `Step` reste une ligne par paquet : les étapes virtuelles sont
+calculées, ce qui évite de dupliquer `Question` (uid unique par quiz). Le PIN
+est retiré : l'identifiant est visible sur l'écran de pré-séance et un
+nouvel appareil remplace l'ancien. Le timer de la présentation reprend
+exactement la taille du timer du tableau de base (demande humaine).
+
+## 2026-11-11 — Dette V2 : inline élèves dans le Groupe et couleurs Round-Robin
+
+**Objectif.** Terminer la V2 : gérer les élèves directement depuis la page
+Groupe et attribuer les couleurs de façon cyclique pour éviter les doublons.
+
+**Prompt / demande.** PR #6, commentaire du 2026-11-11 « Termine la V2 en
+corrigeant l'ergonomie de l'admin et la logique d'attribution des couleurs » ;
+plan de 4 lignes (commentaire `6801333598`) validé par « Je valides tu peux
+lancer l'implémentation ».
+
+**Réalisé.**
+
+- Admin : `StudentInline` (`Nom`, `Prénom`, `Identifiant`) dans `GroupeAdmin`,
+  avec ajout/modification/suppression depuis la page du groupe ; le code est
+  affiché en lecture seule.
+- Identifiant : `Student.code_etudiant` passe en `blank=True` ;
+  `Student.save()` le génère via `Student.generer_code_etudiant` s'il est vide ;
+  `import_participants` utilise la même méthode ; migration `0007`.
+- Couleurs : `services.prochaine_couleur` = `(nombre de participants % 4) + 1` ;
+  `/api/rejoindre/` l'utilise pour les nouvelles connexions de groupe et de
+  démo sous verrou de session ; une reconnexion garde le `Participant` et sa
+  couleur ; défaut du modèle passé à `1` (`tirer_couleur` conservé uniquement
+  pour la migration `0001`).
+- Tests : inline admin (création d'un élève depuis le Groupe), 4 couleurs
+  distinctes, 5e = 1, reconnexion stable, séance libre.
+
+**Vérifications.** `pytest` (192 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures avant/après dans
+`docs/screenshots/dette-v2-inline/`.
+
+**Décisions.** Le tirage aléatoire est retiré du parcours de connexion ;
+`tirer_couleur` reste importable uniquement pour l'historique des migrations.
+SPEC/ARCHITECTURE/ROADMAP ne sont pas modifiés (consigne).
+
+## 2026-11-11 — Sécurité : première connexion propriétaire
+
+**Objectif.** Empêcher un second onglet/appareil de prendre la session d'un
+élève déjà connecté.
+
+**Prompt / demande.** PR #6, commentaire du 2026-11-11 « avant de merge …
+Un élève peut ouvrir un autre onglet et se connecter à la place d'un autre. » ;
+plan de 6 lignes (commentaire `6802027534`) validé par « Parfait tu peux
+lancer le fix ».
+
+**Réalisé.**
+
+- `_rejoindre_groupe` : le `jeton_appareil` existant n'est plus remplacé ;
+  reconnexion acceptée seulement si le jeton fourni correspond (même
+  appareil), sinon `409 deja_connecte` sans jeton ; le premier appareil reste
+  valide.
+- `jeton_appareil` nullable (migration `0008`) ; `reinitialiser_appareil` le
+  passe à `NULL` ; l'ancien jeton reçoit 401 ; le prochain join attribue un
+  nouveau jeton ; le `Participant` et ses réponses sont conservés.
+- Client : le join groupe envoie le jeton stocké (`qcm.jeton.<code>`) et
+  affiche le message dédié ; la page participants garde son bouton
+  « Réinitialiser ».
+- Tests : `test_un_seul_appareil_actif`,
+  `test_reconnexion_meme_jeton_garde_le_participant`,
+  `test_autre_appareil_ne_peut_pas_piloter_le_premier`,
+  `test_reset_prof_libere_lappareil`, `test_reinitialiser_l_appareil` ;
+  `test_couleurs_round_robin_et_reconnexion` adapté.
+
+**Vérifications.** `pytest` (194 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures : `docs/screenshots/securite-prise-controle/`
+(join 409, page participants reset).
+
+**Décisions.** ADR 0009. L'identifiant reste public et une course à la toute
+première connexion reste possible sans secret ; on empêche le vol d'une
+session active, le professeur récupère via reset ; pas de PIN réintroduit.
+SPEC/ARCHITECTURE/ROADMAP non modifiés (à mettre à jour par l'humain :
+« nouvel appareil déconnecte l'ancien »). Le texte « Le PIN n'est jamais
+affiché… » de la page participants est un reste de la V2 sans PIN ; non
+modifié dans ce correctif ciblé, à traiter séparément.
+
+## 2026-11-11 — Sécurité : cookie appareil httpOnly et sessionStorage par onglet
+
+**Objectif.** Empêcher deux élèves de se connecter depuis le même appareil,
+même dans deux onglets : le `localStorage` partagé rendait le correctif 0009
+insuffisant.
+
+**Prompt / demande.** PR #6, commentaire du 2026-11-11 « Le correctif
+précédent n'a pas fonctionné… MARIE-DUP00 puis PAUL-MAR00 dans un nouvel
+onglet… » ; instructions explicites (`sessionStorage`, `cookie_appareil`,
+unicité, tests).
+
+**Réalisé.**
+
+- Jeton de connexion élève dans `sessionStorage` (`rejoindre.js`,
+  `eleve.js`), isolé par onglet ; le `localStorage` ne le porte plus.
+- `cookie_appareil` httpOnly, UUID généré côté serveur, partagé entre les
+  onglets ; `Participant.cookie_appareil` + contrainte d'unicité
+  `(session, cookie_appareil)` (migration `0009`).
+- Join : cookie déjà associé à un autre élève → `409 appareil_deja_utilise` ;
+  même élève sur le même appareil → accepté, jeton renvoyé ; même élève sur un
+  autre appareil → `409 deja_connecte`.
+- Reset professeur : `jeton_appareil` et `cookie_appareil` remis à `NULL`, et
+  cookie supprimé de la réponse ; l'appareil est libéré et les réponses sont
+  conservées.
+- Tests : `test_un_seul_appareil_actif` (même appareil, autre élève refusé),
+  `test_autre_appareil_ne_peut_pas_piloter_le_premier` (autre appareil),
+  `test_reset_prof_libere_lappareil` (cookie supprimé/libéré),
+  `test_reinitialiser_l_appareil`,
+  `test_couleurs_round_robin_et_reconnexion` (un client HTTP par élève).
+
+**Vérifications.** `pytest` (194 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures `docs/screenshots/securite-prise-controle/`
+(scénario Marie connectée / Paul refusé sur le même appareil, page reset).
+
+**Décisions.** ADR 0010 remplace 0009. L'identifiant reste public et une
+course à la toute première connexion reste possible sans PIN ; on empêche le
+partage d'un appareil entre élèves, le professeur récupère via reset.
+SPEC/ARCHITECTURE/ROADMAP non modifiés (à mettre à jour par l'humain :
+« nouvel appareil déconnecte l'ancien »). Le texte « Le PIN n'est jamais
+affiché… » de la page participants reste un reste de la V2 sans PIN, non
+modifié dans ce correctif ciblé.
+
+

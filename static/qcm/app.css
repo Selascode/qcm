@@ -1,3 +1,21 @@
+/* Police locale (SIL OFL, cf. static/qcm/fonts/OFL.txt) : pas de CDN, pour
+   rester lisible hors ligne et sur le réseau local de l'école. */
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("fonts/AtkinsonHyperlegible-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  src: url("fonts/AtkinsonHyperlegible-Bold.ttf") format("truetype");
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --fond: #f5f2ea;
   --surface: #fffdf8;
@@ -9,8 +27,8 @@
   --danger: #a3231a;
   --rayon: 18px;
   --ombre: 0 18px 45px rgba(42, 36, 24, 0.14);
-  --police: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  --police: "Atkinson Hyperlegible", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 * {
@@ -176,6 +194,29 @@ button {
 .form-code select:focus {
   outline: 3px solid #a9c7e4;
   border-color: var(--accent);
+}
+
+.form-rejoindre {
+  margin-top: 0;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--bord);
+}
+
+.form-rejoindre input {
+  font-size: 1.35rem;
+  letter-spacing: 0.06em;
+  text-transform: none;
+}
+
+.form-rejoindre input#code_etudiant {
+  text-transform: uppercase;
+}
+
+.aide-form {
+  margin: -4px 0 0;
+  color: var(--texte-doux);
+  font-size: 0.92rem;
+  line-height: 1.45;
 }
 
 .qr-session {

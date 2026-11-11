@@ -4,7 +4,17 @@ from django.contrib import admin
 from django.urls import reverse
 from django.utils.html import format_html
 
-from qcm.models import Answer, Choice, Participant, Question, Quiz, Session, Step
+from qcm.models import (
+    Answer,
+    Choice,
+    Groupe,
+    Participant,
+    Question,
+    Quiz,
+    Session,
+    Step,
+    Student,
+)
 
 admin.site.site_header = "QCM en direct"
 admin.site.site_title = "QCM en direct"
@@ -19,8 +29,15 @@ class StepInline(admin.TabularInline):
 
 @admin.register(Quiz)
 class QuizAdmin(admin.ModelAdmin):
-    list_display = ("titre", "proprietaire", "nb_etapes", "nb_questions")
-    list_filter = ("proprietaire",)
+    list_display = (
+        "titre",
+        "proprietaire",
+        "penalite_active",
+        "facteur_penalite",
+        "nb_etapes",
+        "nb_questions",
+    )
+    list_filter = ("proprietaire", "penalite_active")
     search_fields = ("titre",)
     inlines = (StepInline,)
 
@@ -88,17 +105,68 @@ class ChoiceAdmin(admin.ModelAdmin):
     search_fields = ("question__uid", "texte")
 
 
+class StudentInline(admin.TabularInline):
+    """Ajout/modification/suppression des élèves depuis la page du groupe."""
+
+    model = Student
+    extra = 1
+    fields = ("nom", "prenom", "code_etudiant")
+    readonly_fields = ("code_etudiant",)
+    ordering = ("nom", "prenom")
+    verbose_name = "Élève"
+    verbose_name_plural = "Élèves"
+
+
+@admin.register(Groupe)
+class GroupeAdmin(admin.ModelAdmin):
+    list_display = (
+        "nom",
+        "proprietaire",
+        "nb_etudiants",
+        "lien_import",
+        "date_creation",
+    )
+    list_filter = ("proprietaire",)
+    search_fields = ("nom",)
+    inlines = (StudentInline,)
+
+    @admin.display(description="Élèves")
+    def nb_etudiants(self, obj: Groupe) -> int:
+        return obj.etudiants.count()
+
+    @admin.display(description="Import")
+    def lien_import(self, obj: Groupe) -> str:
+        url = reverse("qcm:importer_eleves", args=[obj.pk])
+        return format_html('<a href="{}">Importer</a>', url)
+
+
+@admin.register(Student)
+class StudentAdmin(admin.ModelAdmin):
+    list_display = ("nom", "prenom", "code_etudiant", "groupe")
+    list_filter = ("groupe",)
+    search_fields = ("nom", "prenom", "code_etudiant")
+    fields = ("nom", "prenom", "code_etudiant", "groupe")
+    readonly_fields = ("code_etudiant",)
+    list_select_related = ("groupe",)
+
+    def has_add_permission(self, request) -> bool:
+        # Les élèves s'ajoutent depuis l'inline de la page Groupe ; cette
+        # entrée de menu reste en consultation (recherche, filtre).
+        return False
+
+
 @admin.register(Session)
 class SessionAdmin(admin.ModelAdmin):
     list_display = (
         "code_session",
         "quiz",
+        "groupe",
         "statut",
         "etape_courante",
         "ends_at",
         "lien_tableau",
     )
-    list_filter = ("statut", "quiz")
+    list_filter = ("statut", "quiz", "groupe")
     search_fields = ("code_session", "quiz__titre")
     readonly_fields = (
         "code_session",
@@ -109,6 +177,7 @@ class SessionAdmin(admin.ModelAdmin):
     )
     fields = (
         "quiz",
+        "groupe",
         "code_session",
         "statut",
         "etape_courante",
@@ -129,17 +198,26 @@ class ParticipantAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "session",
+        "student",
         "groupe",
         "couleur_assignee",
         "symbole",
+        "derniere_activite",
         "graine_melange",
     )
     list_filter = ("session",)
-    search_fields = ("session__code_session",)
+    search_fields = (
+        "session__code_session",
+        "student__nom",
+        "student__prenom",
+        "student__code_etudiant",
+    )
+    list_select_related = ("student__groupe",)
 
     @admin.display(description="Groupe")
     def groupe(self, obj: Participant) -> str:
-        # TODO(V2) : retourner le groupe de l'élève quand le modèle Groupe existera.
+        if obj.student_id and obj.student.groupe_id:
+            return obj.student.groupe.nom
         return "—"
 
     def has_add_permission(self, request) -> bool:

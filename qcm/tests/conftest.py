@@ -3,6 +3,8 @@
 import pytest
 from django.contrib.auth import get_user_model
 
+from qcm.models import Groupe
+
 
 @pytest.fixture
 def proprietaire(db):
@@ -18,3 +20,8 @@ def autre_proprietaire(db):
         username="autre",
         password="secret",
     )
+
+
+@pytest.fixture
+def groupe(proprietaire):
+    return Groupe.objects.create(nom="ISIA4", proprietaire=proprietaire)

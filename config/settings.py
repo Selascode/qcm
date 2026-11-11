@@ -10,6 +10,10 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-seulement-a-changer")
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
+# Hôte public de l'URL encodée dans le QR code (format « ip:port »).
+# Vide : on garde request.build_absolute_uri (démo locale sur l'ordinateur).
+QCM_LAN_HOST = os.environ.get("QCM_LAN_HOST", "").strip()
+
 
 def _hotes_locaux() -> list[str]:
     """Noms et adresses IPv4 du serveur, pour l'accès téléphone en Wi-Fi local."""

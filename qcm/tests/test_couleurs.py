@@ -4,7 +4,7 @@ import pytest
 
 from qcm.couleurs import COULEURS, NB_COULEURS
 from qcm.import_json import importer_quiz
-from qcm.models import Participant
+from qcm.models import Participant, Session
 from qcm.services import lettres_melangees, question_courante_pour
 from qcm.tests.helpers import creer_session, demarrer, donnees_quiz
 
@@ -54,6 +54,19 @@ def test_une_seule_question_tous_les_eleves_repondent(proprietaire):
     uids = {question_courante_pour(session, p).uid for p in participants}
 
     assert uids == {"E1Q1"}
+
+
+def test_rotation_par_etape_dans_le_paquet(proprietaire):
+    quiz = importer_quiz(donnees_quiz(1, 8), proprietaire)
+    session = demarrer(creer_session(quiz))
+    participant = Participant.objects.create(session=session, couleur_assignee=1)
+
+    assert question_courante_pour(session, participant).uid == "E1Q1"
+
+    for etape, uid in ((2, "E1Q2"), (4, "E1Q4"), (5, "E1Q5"), (8, "E1Q8")):
+        Session.objects.filter(pk=session.pk).update(etape_courante=etape)
+        session.refresh_from_db()
+        assert question_courante_pour(session, participant).uid == uid
 
 
 def test_ordre_des_lettres_deterministe_et_melange(proprietaire):

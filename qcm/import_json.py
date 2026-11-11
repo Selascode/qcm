@@ -1,4 +1,4 @@
-"""Import JSON d'un QCM (format SPEC §5, figé pour la V1).
+"""Import JSON d'un QCM (V2).
 
 Format accepté ::
 
@@ -7,7 +7,6 @@ Format accepté ::
       "questions": [
         {
           "uid": "Q1",
-          "etape": 1,
           "duree_s": 60,
           "enonce": "…",
           "type": "unique",
@@ -19,13 +18,14 @@ Format accepté ::
       ]
     }
 
-La durée est portée par l'étape : toutes les questions d'une même ``etape``
-doivent annoncer la même ``duree_s``. Les questions d'une étape reçoivent
-``ordre`` et ``couleur_slot`` 1, 2, 3, 4 dans l'ordre du fichier.
+Les questions sont lues dans l'ordre du fichier puis regroupées en paquets de
+4 maximum ; un paquet de T questions génère T étapes virtuelles (cf.
+``qcm.services.repartition``). Le champ ``etape`` reste accepté pour les
+anciens fichiers mais n'est plus utilisé. La durée d'un paquet est celle de sa
+première question.
 """
 
 import json
-from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -33,6 +33,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from qcm.models import Choice, Question, Quiz, Step
+from qcm.services.repartition import decouper_en_paquets
 
 
 class ErreurImport(ValueError):
@@ -52,10 +53,7 @@ class _QuestionNormalisee:
     type: str
     afficher_indice_multiple: bool
     choix: list[dict] = field(default_factory=list)
-    etape: int = 1
     duree_s: int = 1
-    ordre: int = 1
-    couleur_slot: int = 1
 
 
 def _est_entier(valeur) -> bool:
@@ -97,7 +95,7 @@ def _normaliser(donnees) -> tuple[str, list[_QuestionNormalisee]]:
             uids.add(uid)
 
         etape = brute.get("etape")
-        if not _est_entier(etape) or etape < 1:
+        if etape is not None and (not _est_entier(etape) or etape < 1):
             erreurs.append(f"{prefixe}.etape doit être un entier >= 1.")
 
         duree_s = brute.get("duree_s")
@@ -178,37 +176,12 @@ def _normaliser(donnees) -> tuple[str, list[_QuestionNormalisee]]:
                 type=type_question,
                 afficher_indice_multiple=afficher,
                 choix=choix,
-                etape=etape,
                 duree_s=duree_s,
             )
         )
 
     if erreurs:
         raise ErreurImport(erreurs)
-
-    par_etape: dict[int, list[_QuestionNormalisee]] = defaultdict(list)
-    for question in normalisees:
-        par_etape[question.etape].append(question)
-
-    numeros = sorted(par_etape)
-    if numeros != list(range(1, len(numeros) + 1)):
-        raise ErreurImport("Les étapes doivent être numérotées de 1 à N, sans trou.")
-
-    for numero in numeros:
-        questions = par_etape[numero]
-        if len(questions) > 4:
-            raise ErreurImport(
-                f"L'étape {numero} contient {len(questions)} questions (maximum 4)."
-            )
-        durees = {question.duree_s for question in questions}
-        if len(durees) > 1:
-            raise ErreurImport(
-                f"L'étape {numero} a des durées différentes ; une étape a "
-                "une seule durée."
-            )
-        for position, question in enumerate(questions, start=1):
-            question.ordre = position
-            question.couleur_slot = position
 
     return titre.strip(), normalisees
 
@@ -223,45 +196,47 @@ def importer_quiz(donnees, proprietaire) -> Quiz:
     titre, questions = _normaliser(donnees)
     with transaction.atomic():
         quiz = Quiz.objects.create(titre=titre, proprietaire=proprietaire)
-        etapes: dict[int, Step] = {}
-        for question_normalisee in questions:
-            etape = etapes.get(question_normalisee.etape)
-            if etape is None:
-                etape = Step.objects.create(
-                    quiz=quiz,
-                    numero=question_normalisee.etape,
-                    duree_s=question_normalisee.duree_s,
-                )
-                etapes[question_normalisee.etape] = etape
-            question = Question(
+        for numero_paquet, paquet in enumerate(
+            decouper_en_paquets(questions, 4), start=1
+        ):
+            etape = Step.objects.create(
                 quiz=quiz,
-                step=etape,
-                uid=question_normalisee.uid,
-                enonce=question_normalisee.enonce,
-                type=question_normalisee.type,
-                afficher_indice_multiple=question_normalisee.afficher_indice_multiple,
-                ordre=question_normalisee.ordre,
-                couleur_slot=question_normalisee.couleur_slot,
+                numero=numero_paquet,
+                duree_s=paquet[0].duree_s,
             )
-            try:
-                question.full_clean()
-            except ValidationError as exc:
-                raise ErreurImport(
-                    f"Question {question_normalisee.uid} invalide : {exc.messages}"
-                ) from exc
-            question.save()
-            Choice.objects.bulk_create(
-                [
-                    Choice(
-                        question=question,
-                        lettre=choix["lettre"],
-                        texte=choix["texte"],
-                        est_correct=choix["correct"],
-                        position=position,
-                    )
-                    for position, choix in enumerate(question_normalisee.choix)
-                ]
-            )
+            for position, question_normalisee in enumerate(paquet, start=1):
+                question = Question(
+                    quiz=quiz,
+                    step=etape,
+                    uid=question_normalisee.uid,
+                    enonce=question_normalisee.enonce,
+                    type=question_normalisee.type,
+                    afficher_indice_multiple=(
+                        question_normalisee.afficher_indice_multiple
+                    ),
+                    ordre=position,
+                    couleur_slot=position,
+                )
+                try:
+                    question.full_clean()
+                except ValidationError as exc:
+                    raise ErreurImport(
+                        f"Question {question_normalisee.uid} invalide : "
+                        f"{exc.messages}"
+                    ) from exc
+                question.save()
+                Choice.objects.bulk_create(
+                    [
+                        Choice(
+                            question=question,
+                            lettre=choix["lettre"],
+                            texte=choix["texte"],
+                            est_correct=choix["correct"],
+                            position=position,
+                        )
+                        for position, choix in enumerate(question_normalisee.choix)
+                    ]
+                )
         return quiz
 
 

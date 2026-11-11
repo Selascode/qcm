@@ -3,6 +3,7 @@
   if (!racine) return;
 
   const code = racine.dataset.code;
+  const estGroupe = racine.dataset.groupe === "1";
   const cleJeton = "qcm.jeton." + code;
   const cleFile = "qcm.file." + code;
 
@@ -18,7 +19,7 @@
   const elValider = document.getElementById("valider");
   const elMessage = document.getElementById("message");
 
-  let jeton = localStorage.getItem(cleJeton);
+  let jeton = sessionStorage.getItem(cleJeton);
   let etat = null;
   let questionUid = null;
   let selection = new Set();
@@ -28,6 +29,16 @@
   let minuterieFile = null;
   let envoiEnCours = false;
   let dernierMessage = "";
+
+  function redirigerVersConnexion() {
+    window.location.href =
+      "/rejoindre/" + encodeURIComponent(code) + "/?reconnect=1";
+  }
+
+  if (estGroupe && !jeton) {
+    window.location.href = "/rejoindre/" + encodeURIComponent(code) + "/";
+    return;
+  }
 
   const uuid = () => {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -197,6 +208,10 @@
   }
 
   async function rejoindre() {
+    if (estGroupe) {
+      redirigerVersConnexion();
+      throw new Error("reconnexion_requise");
+    }
     const reponse = await fetch("/api/rejoindre/", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
@@ -207,7 +222,7 @@
       throw new Error(donnees.raison || "rejoindre");
     }
     jeton = donnees.jeton;
-    localStorage.setItem(cleJeton, jeton);
+    sessionStorage.setItem(cleJeton, jeton);
   }
 
   async function lireEtat() {
@@ -216,10 +231,11 @@
       headers: {"X-Jeton": jeton},
     });
     if (reponse.status === 401) {
+      // Appareil remplacé ou jeton expiré : retour à l'écran de connexion.
       jeton = null;
-      localStorage.removeItem(cleJeton);
-      await rejoindre();
-      return lireEtat();
+      sessionStorage.removeItem(cleJeton);
+      redirigerVersConnexion();
+      return null;
     }
     if (!reponse.ok) throw new Error("etat");
     return reponse.json();
@@ -257,6 +273,12 @@
         }),
       });
       const donnees = await reponse.json().catch(() => ({}));
+      if (reponse.status === 401) {
+        jeton = null;
+        sessionStorage.removeItem(cleJeton);
+        redirigerVersConnexion();
+        return;
+      }
       if (reponse.ok && donnees.ok) {
         retirerDeLaFile(item.id_client);
         delaiReessai = 1000;
@@ -290,7 +312,7 @@
   async function rafraichir() {
     try {
       const donnees = await lireEtat();
-      afficherEtat(donnees);
+      if (donnees) afficherEtat(donnees);
     } catch (erreur) {
       // Hors ligne : l'état affiché reste, la file réessaiera.
     }

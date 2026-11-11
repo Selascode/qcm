@@ -10,11 +10,15 @@ from datetime import timedelta
 
 import qrcode
 import qrcode.image.svg
+from django.conf import settings
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
+from django.urls import reverse
 from django.utils import timezone
 
-from qcm.models import Answer, Session
+from qcm.couleurs import NB_COULEURS, infos_couleur
+from qcm.models import Answer, Participant, Session
+from qcm.services.repartition import EtapeVirtuelle
 
 
 class ErreurPilotage(ValueError):
@@ -39,6 +43,7 @@ def _session_verrouillee(session_id: int) -> Session:
 
 
 def _etapes_ordonnees(session: Session) -> list:
+    """Paquets (lignes ``Step``) ordonnés ; chaque paquet contient 1 à 4 questions."""
     etapes = list(session.quiz.steps.order_by("numero"))
     numeros = [etape.numero for etape in etapes]
     if numeros != list(range(1, len(etapes) + 1)):
@@ -46,22 +51,71 @@ def _etapes_ordonnees(session: Session) -> list:
     return etapes
 
 
+def etapes_virtuelles(session: Session) -> list[EtapeVirtuelle]:
+    """Étapes affichées : T étapes virtuelles pour un paquet de T questions."""
+    etapes = []
+    numero = 0
+    for numero_paquet, paquet in enumerate(_etapes_ordonnees(session), start=1):
+        questions = list(paquet.questions.order_by("ordre", "id"))
+        for index in range(len(questions)):
+            numero += 1
+            etapes.append(
+                EtapeVirtuelle(
+                    numero=numero,
+                    paquet=tuple(questions),
+                    index_dans_paquet=index,
+                    numero_paquet=numero_paquet,
+                )
+            )
+    return etapes
+
+
+def nombre_etapes(session: Session) -> int:
+    """Nombre d'étapes affichées (et non de paquets stockés)."""
+    return len(etapes_virtuelles(session))
+
+
+def _etape_virtuelle(session: Session, numero: int) -> EtapeVirtuelle | None:
+    etapes = etapes_virtuelles(session)
+    if 1 <= numero <= len(etapes):
+        return etapes[numero - 1]
+    return None
+
+
+def questions_de_l_etape(session: Session, numero: int) -> list:
+    """Questions du paquet affiché à l'étape virtuelle ``numero``."""
+    etape = _etape_virtuelle(session, numero)
+    if etape is None:
+        return []
+    return list(etape.paquet)
+
+
+def _duree_etape(session: Session, numero: int) -> int:
+    etape = _etape_virtuelle(session, numero)
+    if etape is None:
+        raise ErreurPilotage("Étape courante incohérente.")
+    paquets = _etapes_ordonnees(session)
+    return paquets[etape.numero_paquet - 1].duree_s
+
+
 def _avancer(session: Session, maintenant) -> Session:
-    """Avance d'une étape (ou termine). Une seule étape à la fois."""
-    etapes = _etapes_ordonnees(session)
+    """Avance d'une étape virtuelle (ou termine). Une seule étape à la fois."""
+    total = nombre_etapes(session)
     if session.etape_courante < 1:
         session.etape_courante = 1
-        if etapes:
-            session.ends_at = maintenant + timedelta(seconds=etapes[0].duree_s)
+        if total:
+            session.ends_at = maintenant + timedelta(
+                seconds=_duree_etape(session, 1)
+            )
             session.statut = Session.STATUT_EN_COURS
             session.reste_en_pause = None
         else:
             session.statut = Session.STATUT_FINI
             session.ends_at = None
-    elif session.etape_courante < len(etapes):
+    elif session.etape_courante < total:
         session.etape_courante += 1
         session.ends_at = maintenant + timedelta(
-            seconds=etapes[session.etape_courante - 1].duree_s
+            seconds=_duree_etape(session, session.etape_courante)
         )
         session.statut = Session.STATUT_EN_COURS
         session.reste_en_pause = None
@@ -102,12 +156,12 @@ def demarrer_session(session: Session, maintenant=None) -> Session:
         session = _session_verrouillee(session.pk)
         if session.statut != Session.STATUT_ATTENTE:
             raise ErreurPilotage("La séance n'est pas en attente.")
-        etapes = _etapes_ordonnees(session)
-        if not etapes:
+        total = nombre_etapes(session)
+        if not total:
             raise ErreurPilotage("Le QCM ne contient aucune étape.")
         session.statut = Session.STATUT_EN_COURS
         session.etape_courante = 1
-        session.ends_at = maintenant + timedelta(seconds=etapes[0].duree_s)
+        session.ends_at = maintenant + timedelta(seconds=_duree_etape(session, 1))
         session.reste_en_pause = None
         session.save(
             update_fields=[
@@ -212,15 +266,14 @@ def etape_precedente(session: Session, maintenant=None) -> Session:
             Session.STATUT_PAUSE,
         ):
             raise ErreurPilotage("La séance n'est pas active.")
-        etapes = _etapes_ordonnees(session)
         if session.etape_courante <= 1:
             raise ErreurPilotage("La séance est déjà à la première étape.")
-        if session.etape_courante > len(etapes):
+        if session.etape_courante > nombre_etapes(session):
             raise ErreurPilotage("Étape courante incohérente.")
         session.etape_courante -= 1
         session.statut = Session.STATUT_EN_COURS
         session.ends_at = maintenant + timedelta(
-            seconds=etapes[session.etape_courante - 1].duree_s
+            seconds=_duree_etape(session, session.etape_courante)
         )
         session.reste_en_pause = None
         session.save(
@@ -235,21 +288,21 @@ def etape_precedente(session: Session, maintenant=None) -> Session:
 
 
 def question_courante_pour(session: Session, participant):
-    """Question que ce participant doit traiter à l'étape courante.
+    """Question que ce participant doit traiter à l'étape virtuelle courante.
 
-    La couleur de l'élève distribue les participants sur les questions
-    présentes. Avec 4 questions, chaque couleur tombe sur sa colonne ; avec
-    moins de questions, on replie modulo le nombre de questions pour que
-    chaque élève ait toujours une question à traiter.
+    La couleur initiale tourne à chaque étape du paquet :
+    ``(couleur_initiale - 1 + étape_dans_paquet) % T + 1``. En T étapes, chaque
+    élève répond donc à toutes les questions du paquet.
     """
-    etape = session.quiz.steps.filter(numero=session.etape_courante).first()
-    if etape is None:
+    etape = _etape_virtuelle(session, session.etape_courante)
+    if etape is None or not etape.paquet:
         return None
-    questions = list(etape.questions.order_by("ordre", "id"))
-    if not questions:
-        return None
-    index = (participant.couleur_assignee - 1) % len(questions)
-    return questions[index]
+    questions = list(etape.paquet)
+    taille = len(questions)
+    couleur = (
+        (participant.couleur_assignee - 1 + etape.index_dans_paquet) % taille + 1
+    )
+    return questions[couleur - 1]
 
 
 def lettres_melangees(participant, question) -> list[str]:
@@ -265,11 +318,25 @@ def compter_reponses_par_question(session: Session, questions) -> dict[int, int]
     if not identifiants:
         return {}
     lignes = (
-        Answer.objects.filter(question_id__in=identifiants)
+        Answer.objects.filter(session=session, question_id__in=identifiants)
         .values("question_id")
         .annotate(nombre=Count("id"))
     )
     return {ligne["question_id"]: ligne["nombre"] for ligne in lignes}
+
+
+def construire_url_rejoindre(request, session: Session) -> str:
+    """URL absolue à encoder dans le QR code d'une séance.
+
+    ``QCM_LAN_HOST`` (format ``ip:port``) permet au téléphone de joindre le
+    serveur sur le réseau local. Sans configuration, on garde l'URL de la
+    requête, pour ne pas casser la démo locale sur l'ordinateur.
+    """
+    chemin = reverse("qcm:rejoindre", args=[session.code_session])
+    hote = (settings.QCM_LAN_HOST or "").strip()
+    if hote:
+        return f"http://{hote.rstrip('/')}{chemin}"
+    return request.build_absolute_uri(chemin)
 
 
 def generer_qr_svg(url: str) -> str:
@@ -283,3 +350,118 @@ def generer_qr_svg(url: str) -> str:
     tampon = io.BytesIO()
     image.save(tampon)
     return tampon.getvalue().decode("utf-8")
+
+
+def _secondes_depuis(maintenant, instant) -> int | None:
+    if instant is None:
+        return None
+    return max(0, int((maintenant - instant).total_seconds()))
+
+
+def prochaine_couleur(session: Session) -> int:
+    """Couleur Round-Robin d'un nouvel élève : 1, 2, 3, 4, 1, 2…
+
+    Le compteur porte sur les participants déjà présents dans la session ;
+    un élève qui se reconnecte garde son ``Participant`` et sa couleur.
+    """
+    deja = Participant.objects.filter(session=session).count()
+    return (deja % NB_COULEURS) + 1
+
+
+def marquer_activite(participant, maintenant=None) -> None:
+    """Met à jour la dernière activité, au plus toutes les 10 secondes.
+
+    Le polling est de 1 à 2 s : sans seuil, chaque élève écrirait en base à
+    chaque requête. Dix secondes suffisent pour l'indicateur « il y a X s ».
+    La colonne n'est jamais remise à ``NULL`` : le statut « Connecté » reste
+    acquis pendant la séance.
+    """
+    maintenant = _maintenant(maintenant)
+    seuil = maintenant - timedelta(seconds=10)
+    (
+        Participant.objects.filter(pk=participant.pk)
+        .filter(Q(derniere_activite__isnull=True) | Q(derniere_activite__lt=seuil))
+        .update(derniere_activite=maintenant)
+    )
+
+
+def etat_participants(session: Session, maintenant=None) -> dict:
+    """Données du panneau participants, sans PIN, hash ni réponse.
+
+    Séance rattachée à un groupe : la liste complète des élèves du groupe, avec
+    ``connecte`` (irréversible) et ``derniere_activite_s``. Séance libre :
+    uniquement les participants effectivement connectés.
+    """
+    maintenant = _maintenant(maintenant)
+
+    if session.groupe_id is None:
+        libres = []
+        for participant in session.participants.select_related("student").order_by(
+            "id"
+        ):
+            libres.append(
+                {
+                    "participant_id": participant.pk,
+                    "nom": participant.student.nom
+                    if participant.student_id
+                    else None,
+                    "prenom": participant.student.prenom
+                    if participant.student_id
+                    else None,
+                    "code_etudiant": participant.student.code_etudiant
+                    if participant.student_id
+                    else None,
+                    "symbole": participant.symbole,
+                    "couleur": infos_couleur(participant.couleur_assignee),
+                    "connecte": participant.derniere_activite is not None,
+                    "derniere_activite_s": _secondes_depuis(
+                        maintenant, participant.derniere_activite
+                    ),
+                }
+            )
+        return {
+            "ok": True,
+            "groupe": None,
+            "connectes": len(libres),
+            "total": len(libres),
+            "participants": libres,
+        }
+
+    participants = {
+        participant.student_id: participant
+        for participant in session.participants.filter(student__isnull=False).only(
+            "student_id",
+            "derniere_activite",
+            "couleur_assignee",
+        )
+    }
+    lignes = []
+    for student in session.groupe.etudiants.order_by("nom", "prenom"):
+        participant = participants.get(student.pk)
+        lignes.append(
+            {
+                "participant_id": participant.pk if participant else None,
+                "nom": student.nom,
+                "prenom": student.prenom,
+                "code_etudiant": student.code_etudiant,
+                "symbole": participant.symbole if participant else None,
+                "couleur": infos_couleur(participant.couleur_assignee)
+                if participant
+                else None,
+                "connecte": participant is not None
+                and participant.derniere_activite is not None,
+                "derniere_activite_s": _secondes_depuis(
+                    maintenant, participant.derniere_activite
+                )
+                if participant
+                else None,
+            }
+        )
+    connectes = sum(1 for ligne in lignes if ligne["connecte"])
+    return {
+        "ok": True,
+        "groupe": session.groupe.nom,
+        "connectes": connectes,
+        "total": len(lignes),
+        "participants": lignes,
+    }

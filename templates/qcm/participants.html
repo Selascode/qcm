@@ -1,0 +1,98 @@
+{% extends "qcm/base.html" %}
+{% load static %}
+{% block title %}Participants — {{ session.quiz.titre }}{% endblock %}
+{% block body_class %}page-prof{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'qcm/prof.css' %}">
+{% endblock %}
+{% block content %}
+<main
+  class="prof-app"
+  id="app-participants"
+  data-code="{{ session.code_session|escapejs }}"
+  data-groupe="{% if etat.groupe %}1{% else %}0{% endif %}"
+>
+  {% csrf_token %}
+  <header class="barre-prof">
+    <div>
+      <p class="sur-titre">Séance {{ session.code_session }}</p>
+      <h1>Participants — {{ session.quiz.titre }}</h1>
+      <p class="sous-titre">
+        {% if etat.groupe %}Groupe « {{ etat.groupe }} » · {% endif %}
+        <strong id="compteur">{{ etat.connectes }} / {{ etat.total }}</strong>
+        connecté(s)
+      </p>
+    </div>
+    <nav class="liens-prof" aria-label="Navigation de la séance">
+      <a class="bouton-secondaire" href="{% url 'qcm:tableau' session.code_session %}">
+        Tableau
+      </a>
+      <a class="bouton-secondaire" href="{% url 'qcm:resultats' session.code_session %}">
+        Résultats
+      </a>
+    </nav>
+  </header>
+
+  {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if not etat.groupe %}
+    <p class="message-info">
+      Cette séance n'est rattachée à aucun groupe. Les participants apparaîtront à la connexion.
+    </p>
+  {% endif %}
+
+  <div class="table-scroll">
+    <table class="table-prof" id="table-participants">
+      <thead>
+        <tr>
+          <th>Nom</th>
+          <th>Prénom</th>
+          <th>Identifiant</th>
+          <th>Statut</th>
+          <th>Dernière activité</th>
+          <th><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody id="lignes-participants">
+        {% for ligne in etat.participants %}
+          <tr data-cle="{% if ligne.code_etudiant %}{{ ligne.code_etudiant }}{% else %}p-{{ ligne.participant_id }}{% endif %}">
+            <td>{{ ligne.nom|default:"—" }}</td>
+            <td>{{ ligne.prenom|default:"—" }}</td>
+            <td class="identifiant">{{ ligne.code_etudiant|default:"—" }}</td>
+            <td class="statut-cell">
+              <span class="pastille-statut {% if ligne.connecte %}connecte{% else %}non-connecte{% endif %}">
+                {% if ligne.connecte %}Connecté{% else %}Non connecté{% endif %}
+              </span>
+            </td>
+            <td class="activite-cell">
+              {% if ligne.derniere_activite_s is not None %}il y a {{ ligne.derniere_activite_s }} s{% else %}—{% endif %}
+            </td>
+            <td>
+              {% if ligne.participant_id %}
+                <form method="post" action="{% url 'qcm:reinitialiser_appareil' session.code_session ligne.participant_id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="bouton-mini">Réinitialiser</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="table-vide">Aucun participant pour le moment.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note-bas">
+    Le PIN n'est jamais affiché ici : il est distribué par la liste imprimable.
+    Le statut « Connecté » reste acquis pendant la séance.
+  </p>
+</main>
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'qcm/participants.js' %}"></script>
+{% endblock %}

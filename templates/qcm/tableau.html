@@ -76,6 +76,17 @@
         >Terminer la séance</button>
       {% endif %}
     </div>
+    <nav class="liens-tableau" aria-label="Navigation de la séance">
+      <a href="{% url 'qcm:participants' session.code_session %}">
+        Voir les participants
+      </a>
+      <a href="{% url 'qcm:resultats' session.code_session %}">Résultats</a>
+      <a
+        href="{% url 'qcm:presentation' session.code_session %}"
+        target="_blank"
+        rel="noopener"
+      >Mode Présentation</a>
+    </nav>
   </header>
 
   <section class="zone-principale">
@@ -84,6 +95,10 @@
         <p class="sur-titre">Séance en attente</p>
         <p class="code-geant">{{ session.code_session }}</p>
         <p>Les élèves rejoignent avec ce code.</p>
+        {% if qr_svg %}
+          <div class="qr-tableau">{{ qr_svg|safe }}</div>
+          <p class="lien-session-tableau">URL encodée : {{ url_rejoindre }}</p>
+        {% endif %}
       </div>
     {% elif session.statut == "fini" %}
       <div class="attente-tableau">

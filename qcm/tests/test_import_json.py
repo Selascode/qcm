@@ -72,7 +72,7 @@ def test_import_valide(proprietaire):
 
     assert quiz.titre == "Quiz test"
     assert quiz.proprietaire == proprietaire
-    assert list(quiz.steps.values_list("numero", "duree_s")) == [(1, 60), (2, 30)]
+    assert list(quiz.steps.values_list("numero", "duree_s")) == [(1, 60)]
 
     questions = list(
         quiz.questions.order_by("step__numero", "ordre").values(
@@ -82,7 +82,7 @@ def test_import_valide(proprietaire):
     assert questions == [
         {"uid": "Q1", "step__numero": 1, "ordre": 1, "couleur_slot": 1},
         {"uid": "Q2", "step__numero": 1, "ordre": 2, "couleur_slot": 2},
-        {"uid": "Q3", "step__numero": 2, "ordre": 1, "couleur_slot": 1},
+        {"uid": "Q3", "step__numero": 1, "ordre": 3, "couleur_slot": 3},
     ]
 
     q3 = Question.objects.get(quiz=quiz, uid="Q3")
@@ -101,16 +101,14 @@ def test_import_du_fichier_de_demo(proprietaire):
     donnees = charger_fichier(RACINE / "examples" / "quiz_demo.json")
     quiz = importer_quiz(donnees, proprietaire)
 
-    assert quiz.steps.count() == 5
+    assert quiz.steps.count() == 3
     assert quiz.questions.count() == 10
     assert list(quiz.steps.values_list("numero", "duree_s")) == [
         (1, 90),
-        (2, 60),
-        (3, 120),
-        (4, 60),
-        (5, 90),
+        (2, 120),
+        (3, 90),
     ]
-    assert quiz.questions.filter(couleur_slot=4).count() == 1
+    assert quiz.questions.filter(couleur_slot=4).count() == 2
 
 
 def test_import_est_transactionnel(proprietaire):
@@ -144,28 +142,38 @@ def test_questions_pas_un_objet(proprietaire):
     assert "doit être un objet" in erreurs(donnees, proprietaire)
 
 
-def test_etapes_avec_trou(proprietaire):
+def test_etape_ignoree_et_regroupement_par_quatre(proprietaire):
     donnees = donnees_valides()
     donnees["questions"][2]["etape"] = 3
 
-    assert "1 à N" in erreurs(donnees, proprietaire)
+    quiz = importer_quiz(donnees, proprietaire)
+
+    assert quiz.steps.count() == 1
+    assert quiz.questions.count() == 3
 
 
-def test_maximum_quatre_questions_par_etape(proprietaire):
+def test_six_questions_donnent_deux_paquets(proprietaire):
     donnees = donnees_valides()
     for index in range(3, 6):
         question = copy.deepcopy(donnees["questions"][0])
         question["uid"] = f"Q{index + 1}"
         donnees["questions"].append(question)
 
-    assert "maximum 4" in erreurs(donnees, proprietaire)
+    quiz = importer_quiz(donnees, proprietaire)
+
+    assert quiz.steps.count() == 2
+    assert [
+        step.questions.count() for step in quiz.steps.order_by("numero")
+    ] == [4, 2]
 
 
-def test_durees_differentes_dans_une_etape(proprietaire):
+def test_duree_du_paquet_est_celle_de_la_premiere_question(proprietaire):
     donnees = donnees_valides()
     donnees["questions"][1]["duree_s"] = 61
 
-    assert "durées différentes" in erreurs(donnees, proprietaire)
+    quiz = importer_quiz(donnees, proprietaire)
+
+    assert quiz.steps.get(numero=1).duree_s == 60
 
 
 def test_question_unique_avec_deux_bonnes_reponses(proprietaire):
@@ -330,7 +338,7 @@ def test_question_uid_unique_par_quiz(proprietaire):
 
 def test_question_maximum_quatre_par_etape(proprietaire):
     quiz = importer_quiz(donnees_valides(), proprietaire)
-    etape = quiz.steps.get(numero=2)
+    etape = quiz.steps.get(numero=1)
     for index in range(4):
         Question.objects.create(
             quiz=quiz,

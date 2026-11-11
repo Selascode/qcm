@@ -9,6 +9,7 @@ import json
 import uuid
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -17,8 +18,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from qcm import services
+from qcm.appareil import lire_cookie_appareil, poser_cookie_appareil
 from qcm.couleurs import infos_couleur
-from qcm.models import Answer, Participant, Question, Session
+from qcm.models import Answer, Participant, Question, Session, Student
 
 
 def _json(request):
@@ -40,42 +42,21 @@ def _participant(request):
         jeton = uuid.UUID(valeur)
     except (TypeError, ValueError, AttributeError):
         return None
-    return (
+    participant = (
         Participant.objects.select_related("session__quiz")
         .filter(jeton_appareil=jeton)
         .first()
     )
+    if participant is not None:
+        services.marquer_activite(participant)
+    return participant
 
 
 def _couleur_question(question: Question) -> dict:
     return infos_couleur(question.couleur_slot)
 
 
-@csrf_exempt
-@require_POST
-def rejoindre(request):
-    donnees = _json(request)
-    if not isinstance(donnees, dict):
-        return _erreur("json_invalide")
-    code = str(donnees.get("code") or "").strip().upper()
-    session = Session.objects.select_related("quiz").filter(code_session=code).first()
-    if session is None:
-        return _erreur("code_inconnu", 404)
-
-    participant = None
-    jeton_brut = donnees.get("jeton")
-    if jeton_brut:
-        try:
-            jeton = uuid.UUID(str(jeton_brut))
-        except (TypeError, ValueError, AttributeError):
-            jeton = None
-        if jeton is not None:
-            participant = Participant.objects.filter(
-                session=session, jeton_appareil=jeton
-            ).first()
-    if participant is None:
-        participant = Participant.objects.create(session=session)
-
+def _reponse_participant(session: Session, participant: Participant) -> JsonResponse:
     return JsonResponse(
         {
             "ok": True,
@@ -87,6 +68,137 @@ def rejoindre(request):
             "statut": session.statut,
         }
     )
+
+
+def _rejoindre_groupe(
+    donnees, session: Session, cookie_appareil: uuid.UUID
+) -> JsonResponse:
+    """Connexion d'un élève identifié : code de session + identifiant.
+
+    L'appareil est identifié par le cookie httpOnly partagé entre les onglets.
+    Un cookie ne peut être associé qu'à un seul ``Participant`` actif par
+    session ; le jeton élève, lui, reste stocké dans ``sessionStorage``.
+    """
+    code_etudiant = str(donnees.get("code_etudiant") or "").strip()
+    if not code_etudiant:
+        return _erreur("identifiant_requis")
+
+    student = Student.objects.filter(
+        code_etudiant__iexact=code_etudiant,
+        groupe_id=session.groupe_id,
+    ).first()
+    if student is None:
+        return _erreur("identifiant_inconnu", 404)
+
+    maintenant = timezone.now()
+    with transaction.atomic():
+        # Verrou de session : deux connexions simultanées ne prennent pas la
+        # même couleur Round-Robin ni le même cookie appareil.
+        session = Session.objects.select_for_update().get(pk=session.pk)
+        participant = (
+            Participant.objects.select_for_update()
+            .filter(session=session, student=student)
+            .first()
+        )
+        if participant is None:
+            if Participant.objects.filter(
+                session=session, cookie_appareil=cookie_appareil
+            ).exists():
+                # Cet appareil est déjà rattaché à un autre élève.
+                return _erreur("appareil_deja_utilise", 409)
+            try:
+                with transaction.atomic():
+                    participant = Participant.objects.create(
+                        session=session,
+                        student=student,
+                        derniere_activite=maintenant,
+                        couleur_assignee=services.prochaine_couleur(session),
+                        cookie_appareil=cookie_appareil,
+                    )
+            except IntegrityError:
+                participant = (
+                    Participant.objects.select_for_update()
+                    .filter(session=session, student=student)
+                    .first()
+                )
+                if (
+                    participant is None
+                    or participant.cookie_appareil != cookie_appareil
+                ):
+                    return _erreur("appareil_deja_utilise", 409)
+                participant.derniere_activite = maintenant
+                participant.save(update_fields=["derniere_activite"])
+        else:
+            if (
+                participant.cookie_appareil is not None
+                and participant.cookie_appareil != cookie_appareil
+            ):
+                # Le même élève est déjà actif sur un autre appareil.
+                return _erreur("deja_connecte", 409)
+            # Même appareil (nouvel onglet) ou appareil libéré par le reset :
+            # le jeton de session est renvoyé/renouvelé, le cookie est rattaché.
+            champs = ["cookie_appareil", "derniere_activite"]
+            participant.cookie_appareil = cookie_appareil
+            participant.derniere_activite = maintenant
+            if participant.jeton_appareil is None:
+                participant.jeton_appareil = uuid.uuid4()
+                champs.append("jeton_appareil")
+            participant.save(update_fields=champs)
+
+    return _reponse_participant(session, participant)
+
+    return _reponse_participant(session, participant)
+
+
+@csrf_exempt
+@require_POST
+def rejoindre(request):
+    donnees = _json(request)
+    if not isinstance(donnees, dict):
+        return _erreur("json_invalide")
+    code = str(donnees.get("code") or "").strip().upper()
+    session = (
+        Session.objects.select_related("quiz", "groupe")
+        .filter(code_session=code)
+        .first()
+    )
+    if session is None:
+        return _erreur("code_inconnu", 404)
+
+    if session.groupe_id is not None:
+        cookie_appareil, nouveau = lire_cookie_appareil(request)
+        reponse = _rejoindre_groupe(donnees, session, cookie_appareil)
+        if nouveau:
+            poser_cookie_appareil(reponse, cookie_appareil)
+        return reponse
+
+    jeton = None
+    jeton_brut = donnees.get("jeton")
+    if jeton_brut:
+        try:
+            jeton = uuid.UUID(str(jeton_brut))
+        except (TypeError, ValueError, AttributeError):
+            jeton = None
+
+    with transaction.atomic():
+        # Même verrou que pour les séances avec groupe : la couleur est
+        # attribuée en Round-Robin et conservée à la reconnexion.
+        session = Session.objects.select_for_update().get(pk=session.pk)
+        participant = None
+        if jeton is not None:
+            participant = Participant.objects.filter(
+                session=session, jeton_appareil=jeton
+            ).first()
+        if participant is None:
+            participant = Participant.objects.create(
+                session=session,
+                derniere_activite=timezone.now(),
+                couleur_assignee=services.prochaine_couleur(session),
+            )
+        else:
+            services.marquer_activite(participant)
+
+    return _reponse_participant(session, participant)
 
 
 def _etat_question(participant, question) -> dict:
@@ -126,7 +238,7 @@ def etat_eleve(request):
         "ok": True,
         "statut": session.statut,
         "etape": session.etape_courante,
-        "nb_etapes": session.quiz.steps.count(),
+        "nb_etapes": services.nombre_etapes(session),
     }
 
     if session.statut in (
@@ -203,17 +315,20 @@ def repondre(request):
                 }
             )
 
-        question = (
-            Question.objects.filter(
-                quiz=session.quiz,
-                step__numero=session.etape_courante,
-                uid=question_uid,
-            )
-            .prefetch_related("choices")
-            .first()
+        questions = services.questions_de_l_etape(
+            session, session.etape_courante
+        )
+        question = next(
+            (candidat for candidat in questions if candidat.uid == question_uid),
+            None,
         )
         if question is None:
             return _erreur("question_inconnue", 404)
+        question = (
+            Question.objects.filter(pk=question.pk)
+            .prefetch_related("choices")
+            .first()
+        )
 
         cible = services.question_courante_pour(session, participant)
         if cible is None or cible.pk != question.pk:
@@ -251,18 +366,33 @@ def repondre(request):
     return JsonResponse({"ok": True, "recu": True, "id_client": str(id_client)})
 
 
+@login_required
+@require_GET
+def etat_participants(request):
+    """État de la page participants (prof propriétaire uniquement).
+
+    Ne renvoie jamais de PIN, de hash, d'énoncé, de texte de choix ni de
+    réponse d'élève.
+    """
+    code = str(request.GET.get("code") or "").strip().upper()
+    session = get_object_or_404(
+        Session.objects.select_related("quiz", "groupe"),
+        code_session=code,
+    )
+    if session.quiz.proprietaire_id != request.user.pk:
+        raise PermissionDenied("Cette séance ne vous appartient pas.")
+    return JsonResponse(services.etat_participants(session))
+
+
 def _questions_prof(session: Session) -> list[dict]:
     if session.statut not in (
         Session.STATUT_EN_COURS,
         Session.STATUT_PAUSE,
     ):
         return []
-    etape = session.quiz.steps.filter(numero=session.etape_courante).first()
-    if etape is None:
+    questions = services.questions_de_l_etape(session, session.etape_courante)
+    if not questions:
         return []
-    questions = list(
-        etape.questions.prefetch_related("choices").order_by("ordre", "id")
-    )
     compteurs = services.compter_reponses_par_question(session, questions)
     resultat = []
     for question in questions:
@@ -307,7 +437,7 @@ def etat_prof(request):
             "code": session.code_session,
             "statut": session.statut,
             "etape": session.etape_courante,
-            "nb_etapes": session.quiz.steps.count(),
+            "nb_etapes": services.nombre_etapes(session),
             "temps_restant_s": services.temps_restant_s(session),
             "ends_at": session.ends_at.isoformat() if session.ends_at else None,
             "nb_participants": session.participants.count(),

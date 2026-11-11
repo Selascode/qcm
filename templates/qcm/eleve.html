@@ -6,7 +6,12 @@
 <link rel="stylesheet" href="{% static 'qcm/eleve.css' %}">
 {% endblock %}
 {% block content %}
-<main id="app" class="eleve-app" data-code="{{ session.code_session|escapejs }}">
+<main
+  id="app"
+  class="eleve-app"
+  data-code="{{ session.code_session|escapejs }}"
+  data-groupe="{% if session.groupe %}1{% else %}0{% endif %}"
+>
   <header class="eleve-entete">
     <div>
       <p class="sur-titre">QCM en direct</p>

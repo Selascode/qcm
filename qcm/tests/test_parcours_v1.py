@@ -1,4 +1,4 @@
-"""Critère V1 : 5 étapes, redémarrage serveur au milieu, zéro réponse perdue."""
+"""Critère V1 : 5 paquets (20 étapes), redémarrage serveur au milieu, zéro perte."""
 
 import uuid
 
@@ -22,7 +22,7 @@ from qcm.tests.helpers import (
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
-def test_parcours_cinq_etapes_avec_redemarrage(client):
+def test_parcours_vingt_etapes_avec_redemarrage(client):
     proprietaire = get_user_model().objects.create_user(
         username="prof-parcours",
         password="secret",
@@ -38,7 +38,7 @@ def test_parcours_cinq_etapes_avec_redemarrage(client):
         jetons.append((donnees["jeton"], donnees["participant_id"]))
     session = demarrer(session)
 
-    for etape in range(1, 6):
+    for etape in range(1, 21):
         for jeton, _ in jetons:
             donnees = etat(client, jeton).json()
             assert donnees["statut"] == "en_cours"
@@ -60,7 +60,7 @@ def test_parcours_cinq_etapes_avec_redemarrage(client):
 
         expirer_etape(session)
         donnees = etat(client, jetons[0][0]).json()
-        if etape < 5:
+        if etape < 20:
             assert donnees["statut"] == "en_cours"
             assert donnees["etape"] == etape + 1
         else:
@@ -68,10 +68,10 @@ def test_parcours_cinq_etapes_avec_redemarrage(client):
 
     session = Session.objects.get(pk=session.pk)
     assert session.statut == Session.STATUT_FINI
-    assert Answer.objects.count() == 20
+    assert Answer.objects.count() == 80
     assert Answer.objects.values("question_id").distinct().count() == 20
     for _, participant_id in jetons:
-        assert Answer.objects.filter(participant_id=participant_id).count() == 5
+        assert Answer.objects.filter(participant_id=participant_id).count() == 20
 
     # Reconnexion d'un élève après le redémarrage : ses réponses sont là.
     donnees = etat(client, jetons[0][0]).json()
