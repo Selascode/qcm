@@ -259,4 +259,38 @@ est retiré : l'identifiant est visible sur l'écran de pré-séance et un
 nouvel appareil remplace l'ancien. Le timer de la présentation reprend
 exactement la taille du timer du tableau de base (demande humaine).
 
+## 2026-11-11 — Dette V2 : inline élèves dans le Groupe et couleurs Round-Robin
+
+**Objectif.** Terminer la V2 : gérer les élèves directement depuis la page
+Groupe et attribuer les couleurs de façon cyclique pour éviter les doublons.
+
+**Prompt / demande.** PR #6, commentaire du 2026-11-11 « Termine la V2 en
+corrigeant l'ergonomie de l'admin et la logique d'attribution des couleurs » ;
+plan de 4 lignes (commentaire `6801333598`) validé par « Je valides tu peux
+lancer l'implémentation ».
+
+**Réalisé.**
+
+- Admin : `StudentInline` (`Nom`, `Prénom`, `Identifiant`) dans `GroupeAdmin`,
+  avec ajout/modification/suppression depuis la page du groupe ; le code est
+  affiché en lecture seule.
+- Identifiant : `Student.code_etudiant` passe en `blank=True` ;
+  `Student.save()` le génère via `Student.generer_code_etudiant` s'il est vide ;
+  `import_participants` utilise la même méthode ; migration `0007`.
+- Couleurs : `services.prochaine_couleur` = `(nombre de participants % 4) + 1` ;
+  `/api/rejoindre/` l'utilise pour les nouvelles connexions de groupe et de
+  démo sous verrou de session ; une reconnexion garde le `Participant` et sa
+  couleur ; défaut du modèle passé à `1` (`tirer_couleur` conservé uniquement
+  pour la migration `0001`).
+- Tests : inline admin (création d'un élève depuis le Groupe), 4 couleurs
+  distinctes, 5e = 1, reconnexion stable, séance libre.
+
+**Vérifications.** `pytest` (192 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures avant/après dans
+`docs/screenshots/dette-v2-inline/`.
+
+**Décisions.** Le tirage aléatoire est retiré du parcours de connexion ;
+`tirer_couleur` reste importable uniquement pour l'historique des migrations.
+SPEC/ARCHITECTURE/ROADMAP ne sont pas modifiés (consigne).
+
 

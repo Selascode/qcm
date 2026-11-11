@@ -13,6 +13,7 @@ configurable par QCM. ``Session.groupe`` reste nullable pour la démo.
 """
 
 import secrets
+import unicodedata
 import uuid
 
 from django.conf import settings
@@ -32,11 +33,28 @@ def generer_code_session() -> str:
 
 
 def tirer_couleur() -> int:
+    """Ancien tirage aléatoire, conservé pour la migration 0001.
+
+    La couleur réelle est désormais attribuée en Round-Robin à la connexion
+    (``services.prochaine_couleur``) ; ce helper n'est plus utilisé par le
+    modèle mais reste importable par les migrations historiques.
+    """
     return secrets.randbelow(NB_COULEURS) + 1
 
 
 def tirer_graine() -> int:
     return secrets.randbits(32)
+
+
+def _normaliser_texte(texte: str) -> str:
+    normalise = (
+        unicodedata.normalize("NFKD", texte)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    return "".join(
+        caractere for caractere in normalise if caractere.isalnum()
+    ).upper()
 
 
 def valider_facteur_penalite(valeur: float) -> None:
@@ -258,7 +276,12 @@ class Student(models.Model):
 
     nom = models.CharField("Nom", max_length=100)
     prenom = models.CharField("Prénom", max_length=100)
-    code_etudiant = models.CharField("Identifiant", max_length=32, unique=True)
+    code_etudiant = models.CharField(
+        "Identifiant",
+        max_length=32,
+        unique=True,
+        blank=True,
+    )
     groupe = models.ForeignKey(
         Groupe,
         on_delete=models.PROTECT,
@@ -270,6 +293,32 @@ class Student(models.Model):
         ordering = ("nom", "prenom")
         verbose_name = "Élève (Base)"
         verbose_name_plural = "Élèves (Base)"
+
+    @classmethod
+    def generer_code_etudiant(cls, nom: str, prenom: str) -> str:
+        """Identifiant lisible ``PRENOM-NOMnn`` (ex. ``MARIE-DUP32``), unique."""
+        prenom_normalise = _normaliser_texte(prenom)[:20] or "ELEVE"
+        nom_normalise = _normaliser_texte(nom)[:3] or "XXX"
+        base = f"{prenom_normalise}-{nom_normalise}"
+        for numero in range(100):
+            code = f"{base}{numero:02d}"
+            if not cls.objects.filter(code_etudiant=code).exists():
+                return code
+        for numero in range(10000):
+            code = f"{base}{numero:04d}"
+            if not cls.objects.filter(code_etudiant=code).exists():
+                return code
+        raise ValidationError(
+            "Impossible de générer un identifiant unique pour "
+            f"{prenom} {nom}."
+        )
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.code_etudiant:
+            self.code_etudiant = type(self).generer_code_etudiant(
+                self.nom, self.prenom
+            )
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.prenom} {self.nom} ({self.code_etudiant})"
@@ -376,7 +425,7 @@ class Participant(models.Model):
     couleur_assignee = models.PositiveSmallIntegerField(
         "Couleur assignée",
         validators=[MinValueValidator(1), MaxValueValidator(NB_COULEURS)],
-        default=tirer_couleur,
+        default=1,
     )
     graine_melange = models.PositiveBigIntegerField(
         "Graine de mélange",

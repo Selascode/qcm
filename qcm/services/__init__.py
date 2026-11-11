@@ -16,7 +16,7 @@ from django.db.models import Count, Q
 from django.urls import reverse
 from django.utils import timezone
 
-from qcm.couleurs import infos_couleur
+from qcm.couleurs import NB_COULEURS, infos_couleur
 from qcm.models import Answer, Participant, Session
 from qcm.services.repartition import EtapeVirtuelle
 
@@ -356,6 +356,16 @@ def _secondes_depuis(maintenant, instant) -> int | None:
     if instant is None:
         return None
     return max(0, int((maintenant - instant).total_seconds()))
+
+
+def prochaine_couleur(session: Session) -> int:
+    """Couleur Round-Robin d'un nouvel élève : 1, 2, 3, 4, 1, 2…
+
+    Le compteur porte sur les participants déjà présents dans la session ;
+    un élève qui se reconnecte garde son ``Participant`` et sa couleur.
+    """
+    deja = Participant.objects.filter(session=session).count()
+    return (deja % NB_COULEURS) + 1
 
 
 def marquer_activite(participant, maintenant=None) -> None:

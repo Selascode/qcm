@@ -7,15 +7,19 @@ séance. L'identifiant est visible sur l'écran de pré-séance.
 
 import csv
 import json
-import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from qcm.models import Groupe, Student
 
 LONGUEUR_MAX_NOM = 100
+
+# Alias conservé pour les tests et la commande : la génération vit sur
+# ``Student`` afin d'être aussi utilisée par l'admin inline.
+generer_code_etudiant = Student.generer_code_etudiant
 
 
 class ErreurImportParticipants(ValueError):
@@ -180,32 +184,6 @@ def valider_lignes(lignes: list[LigneEleve], groupe: Groupe) -> None:
         raise ErreurImportParticipants(erreurs)
 
 
-def _normaliser_texte(texte: str) -> str:
-    normalise = (
-        unicodedata.normalize("NFKD", texte)
-        .encode("ascii", "ignore")
-        .decode("ascii")
-    )
-    return "".join(
-        caractere for caractere in normalise if caractere.isalnum()
-    ).upper()
-
-
-def generer_code_etudiant(nom: str, prenom: str) -> str:
-    """Identifiant lisible ``PRENOM-NOMnn`` (ex. ``MARIE-DUP32``), unique."""
-    prenom_normalise = _normaliser_texte(prenom)[:20] or "ELEVE"
-    nom_normalise = _normaliser_texte(nom)[:3] or "XXX"
-    base = f"{prenom_normalise}-{nom_normalise}"
-    for numero in range(100):
-        code = f"{base}{numero:02d}"
-        if not Student.objects.filter(code_etudiant=code).exists():
-            return code
-    raise ErreurImportParticipants(
-        "Impossible de générer un identifiant unique pour "
-        f"{prenom} {nom} : trop d'homonymes."
-    )
-
-
 def importer_participants(
     lignes: list[LigneEleve],
     groupe: Groupe,
@@ -219,7 +197,10 @@ def importer_participants(
     resultats = []
     with transaction.atomic():
         for ligne in lignes:
-            code = generer_code_etudiant(ligne.nom, ligne.prenom)
+            try:
+                code = generer_code_etudiant(ligne.nom, ligne.prenom)
+            except ValidationError as exc:
+                raise ErreurImportParticipants(str(exc)) from exc
             Student.objects.create(
                 nom=ligne.nom,
                 prenom=ligne.prenom,

@@ -152,3 +152,72 @@ def test_page_rejoindre_demo_sans_identifiant(client, proprietaire):
     contenu = client.get(f"/rejoindre/{session.code_session}/").content.decode()
 
     assert 'id="code_etudiant"' not in contenu
+
+
+def test_couleurs_round_robin_et_reconnexion(client, groupe, session_groupe):
+    etudiants = [
+        creer_eleve(
+            groupe,
+            nom=f"Nom{index}",
+            prenom=f"Prenom{index}",
+            code_etudiant=f"ELEVE{index}",
+        )
+        for index in range(1, 6)
+    ]
+
+    for etudiant in etudiants[:4]:
+        assert (
+            rejoindre_eleve(
+                client, session_groupe, etudiant.code_etudiant
+            ).status_code
+            == 200
+        )
+
+    participants = list(
+        Participant.objects.filter(session=session_groupe).order_by("id")
+    )
+    assert [participant.couleur_assignee for participant in participants] == [
+        1,
+        2,
+        3,
+        4,
+    ]
+
+    assert (
+        rejoindre_eleve(
+            client, session_groupe, etudiants[4].code_etudiant
+        ).status_code
+        == 200
+    )
+    cinquieme = Participant.objects.get(student=etudiants[4])
+    assert cinquieme.couleur_assignee == 1
+
+    premier = Participant.objects.get(student=etudiants[0])
+    rejoindre_eleve(client, session_groupe, etudiants[0].code_etudiant)
+    premier.refresh_from_db()
+    assert premier.couleur_assignee == 1
+    assert Participant.objects.filter(session=session_groupe).count() == 5
+
+
+def test_couleurs_round_robin_en_seance_libre(client, proprietaire):
+    quiz = importer_quiz(donnees_quiz(1, 1), proprietaire)
+    session = Session.objects.create(quiz=quiz)
+
+    for _ in range(5):
+        reponse = client.post(
+            "/api/rejoindre/",
+            data=json.dumps({"code": session.code_session}),
+            content_type="application/json",
+        )
+        assert reponse.status_code == 200
+
+    participants = list(
+        Participant.objects.filter(session=session).order_by("id")
+    )
+    assert [participant.couleur_assignee for participant in participants] == [
+        1,
+        2,
+        3,
+        4,
+        1,
+    ]

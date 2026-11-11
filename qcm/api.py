@@ -84,6 +84,9 @@ def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
 
     maintenant = timezone.now()
     with transaction.atomic():
+        # Verrou de session : deux connexions simultanées ne prennent pas la
+        # même couleur Round-Robin.
+        session = Session.objects.select_for_update().get(pk=session.pk)
         participant = (
             Participant.objects.select_for_update()
             .filter(session=session, student=student)
@@ -96,6 +99,7 @@ def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
                         session=session,
                         student=student,
                         derniere_activite=maintenant,
+                        couleur_assignee=services.prochaine_couleur(session),
                     )
             except IntegrityError:
                 participant = Participant.objects.select_for_update().get(
@@ -109,6 +113,7 @@ def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
                 )
         else:
             # Un seul appareil actif : l'ancien jeton ne répond plus (401).
+            # La couleur initiale du Participant est conservée.
             participant.jeton_appareil = uuid.uuid4()
             participant.derniere_activite = maintenant
             participant.save(update_fields=["jeton_appareil", "derniere_activite"])
@@ -134,24 +139,31 @@ def rejoindre(request):
     if session.groupe_id is not None:
         return _rejoindre_groupe(donnees, session)
 
-    participant = None
+    jeton = None
     jeton_brut = donnees.get("jeton")
     if jeton_brut:
         try:
             jeton = uuid.UUID(str(jeton_brut))
         except (TypeError, ValueError, AttributeError):
             jeton = None
+
+    with transaction.atomic():
+        # Même verrou que pour les séances avec groupe : la couleur est
+        # attribuée en Round-Robin et conservée à la reconnexion.
+        session = Session.objects.select_for_update().get(pk=session.pk)
+        participant = None
         if jeton is not None:
             participant = Participant.objects.filter(
                 session=session, jeton_appareil=jeton
             ).first()
-    if participant is None:
-        participant = Participant.objects.create(
-            session=session,
-            derniere_activite=timezone.now(),
-        )
-    else:
-        services.marquer_activite(participant)
+        if participant is None:
+            participant = Participant.objects.create(
+                session=session,
+                derniere_activite=timezone.now(),
+                couleur_assignee=services.prochaine_couleur(session),
+            )
+        else:
+            services.marquer_activite(participant)
 
     return _reponse_participant(session, participant)
 

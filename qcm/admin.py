@@ -105,6 +105,18 @@ class ChoiceAdmin(admin.ModelAdmin):
     search_fields = ("question__uid", "texte")
 
 
+class StudentInline(admin.TabularInline):
+    """Ajout/modification/suppression des élèves depuis la page du groupe."""
+
+    model = Student
+    extra = 1
+    fields = ("nom", "prenom", "code_etudiant")
+    readonly_fields = ("code_etudiant",)
+    ordering = ("nom", "prenom")
+    verbose_name = "Élève"
+    verbose_name_plural = "Élèves"
+
+
 @admin.register(Groupe)
 class GroupeAdmin(admin.ModelAdmin):
     list_display = (
@@ -116,6 +128,7 @@ class GroupeAdmin(admin.ModelAdmin):
     )
     list_filter = ("proprietaire",)
     search_fields = ("nom",)
+    inlines = (StudentInline,)
 
     @admin.display(description="Élèves")
     def nb_etudiants(self, obj: Groupe) -> int:
@@ -137,7 +150,8 @@ class StudentAdmin(admin.ModelAdmin):
     list_select_related = ("groupe",)
 
     def has_add_permission(self, request) -> bool:
-        # Les élèves sont créés par ``import_participants`` (identifiant + PIN).
+        # Les élèves s'ajoutent depuis l'inline de la page Groupe ; cette
+        # entrée de menu reste en consultation (recherche, filtre).
         return False
 
 
