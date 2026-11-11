@@ -19,7 +19,7 @@
   const elValider = document.getElementById("valider");
   const elMessage = document.getElementById("message");
 
-  let jeton = localStorage.getItem(cleJeton);
+  let jeton = sessionStorage.getItem(cleJeton);
   let etat = null;
   let questionUid = null;
   let selection = new Set();
@@ -222,7 +222,7 @@
       throw new Error(donnees.raison || "rejoindre");
     }
     jeton = donnees.jeton;
-    localStorage.setItem(cleJeton, jeton);
+    sessionStorage.setItem(cleJeton, jeton);
   }
 
   async function lireEtat() {
@@ -233,7 +233,7 @@
     if (reponse.status === 401) {
       // Appareil remplacé ou jeton expiré : retour à l'écran de connexion.
       jeton = null;
-      localStorage.removeItem(cleJeton);
+      sessionStorage.removeItem(cleJeton);
       redirigerVersConnexion();
       return null;
     }
@@ -275,7 +275,7 @@
       const donnees = await reponse.json().catch(() => ({}));
       if (reponse.status === 401) {
         jeton = null;
-        localStorage.removeItem(cleJeton);
+        sessionStorage.removeItem(cleJeton);
         redirigerVersConnexion();
         return;
       }

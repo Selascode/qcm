@@ -3,8 +3,10 @@
 import json
 
 import pytest
+from django.test import Client
 from django.urls import reverse
 
+from qcm.appareil import NOM_COOKIE_APPAREIL
 from qcm.import_json import importer_quiz
 from qcm.models import Participant, Session
 from qcm.tests.helpers import (
@@ -89,14 +91,26 @@ def test_eleve_d_un_autre_groupe_refuse(client, proprietaire, groupe, session_gr
 
 def test_un_seul_appareil_actif(client, groupe, session_groupe):
     creer_eleve(groupe, code_etudiant="MD0001")
+    creer_eleve(
+        groupe,
+        nom="Martin",
+        prenom="Paul",
+        code_etudiant="MD0002",
+    )
 
     premier = rejoindre_eleve(client, session_groupe, "MD0001")
     jeton_premier = premier.json()["jeton"]
-    second = rejoindre_eleve(client, session_groupe, "MD0001")
 
-    assert second.status_code == 409
-    assert second.json()["raison"] == "deja_connecte"
-    assert "jeton" not in second.json()
+    # Même élève, même navigateur (autre onglet) : accepté.
+    meme = rejoindre_eleve(client, session_groupe, "MD0001")
+    assert meme.status_code == 200
+    assert meme.json()["participant_id"] == premier.json()["participant_id"]
+
+    # Autre élève sur le même navigateur : refusé (cookie appareil partagé).
+    autre = rejoindre_eleve(client, session_groupe, "MD0002")
+    assert autre.status_code == 409
+    assert autre.json()["raison"] == "appareil_deja_utilise"
+    assert "jeton" not in autre.json()
     assert Participant.objects.count() == 1
     assert etat(client, jeton_premier).status_code == 200
 
@@ -120,9 +134,11 @@ def test_autre_appareil_ne_peut_pas_piloter_le_premier(client, groupe, session_g
     demarrer(session_groupe)
     jeton = rejoindre_eleve(client, session_groupe, "MD0001").json()["jeton"]
 
-    second = rejoindre_eleve(client, session_groupe, "MD0001")
+    autre = Client()
+    second = rejoindre_eleve(autre, session_groupe, "MD0001")
 
     assert second.status_code == 409
+    assert second.json()["raison"] == "deja_connecte"
     assert repondre(client, jeton, "E1Q1", ["A"]).status_code == 200
 
 
@@ -143,6 +159,8 @@ def test_reset_prof_libere_lappareil(client, proprietaire, groupe, session_group
     assert reponse.status_code == 302
     participant.refresh_from_db()
     assert participant.jeton_appareil is None
+    assert participant.cookie_appareil is None
+    assert client.cookies[NOM_COOKIE_APPAREIL].value == ""
     assert etat(client, jeton_initial).status_code == 401
 
     nouveau = rejoindre_eleve(client, session_groupe, "MD0001")
@@ -150,6 +168,7 @@ def test_reset_prof_libere_lappareil(client, proprietaire, groupe, session_group
     assert nouveau.status_code == 200
     jeton_nouveau = nouveau.json()["jeton"]
     assert jeton_nouveau != jeton_initial
+    assert client.cookies[NOM_COOKIE_APPAREIL].value != ""
     assert Participant.objects.count() == 1
     assert etat(client, jeton_nouveau).status_code == 200
     assert etat(client, jeton_initial).status_code == 401
@@ -210,9 +229,12 @@ def test_couleurs_round_robin_et_reconnexion(client, groupe, session_groupe):
         )
         for index in range(1, 6)
     ]
+    clients = [Client() for _ in range(5)]
 
     for index, etudiant in enumerate(etudiants[:4]):
-        reponse = rejoindre_eleve(client, session_groupe, etudiant.code_etudiant)
+        reponse = rejoindre_eleve(
+            clients[index], session_groupe, etudiant.code_etudiant
+        )
         assert reponse.status_code == 200
         if index == 0:
             jeton_premier = reponse.json()["jeton"]
@@ -229,7 +251,7 @@ def test_couleurs_round_robin_et_reconnexion(client, groupe, session_groupe):
 
     assert (
         rejoindre_eleve(
-            client, session_groupe, etudiants[4].code_etudiant
+            clients[4], session_groupe, etudiants[4].code_etudiant
         ).status_code
         == 200
     )
@@ -239,7 +261,10 @@ def test_couleurs_round_robin_et_reconnexion(client, groupe, session_groupe):
     premier = Participant.objects.get(student=etudiants[0])
     assert (
         rejoindre_eleve(
-            client, session_groupe, etudiants[0].code_etudiant, jeton=jeton_premier
+            clients[0],
+            session_groupe,
+            etudiants[0].code_etudiant,
+            jeton=jeton_premier,
         ).status_code
         == 200
     )

@@ -7,6 +7,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
+from qcm.appareil import NOM_COOKIE_APPAREIL
 from qcm.import_json import importer_quiz
 from qcm.models import Participant, Session
 from qcm.tests.helpers import (
@@ -183,6 +184,8 @@ def test_reinitialiser_l_appareil(
     assert reponse.status_code == 302
     participant.refresh_from_db()
     assert participant.jeton_appareil is None
+    assert participant.cookie_appareil is None
+    assert client.cookies[NOM_COOKIE_APPAREIL].value == ""
 
 
 def test_reinitialiser_refuse_a_un_autre_professeur(

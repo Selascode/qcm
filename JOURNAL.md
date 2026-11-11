@@ -333,4 +333,46 @@ SPEC/ARCHITECTURE/ROADMAP non modifiés (à mettre à jour par l'humain :
 affiché… » de la page participants est un reste de la V2 sans PIN ; non
 modifié dans ce correctif ciblé, à traiter séparément.
 
+## 2026-11-11 — Sécurité : cookie appareil httpOnly et sessionStorage par onglet
+
+**Objectif.** Empêcher deux élèves de se connecter depuis le même appareil,
+même dans deux onglets : le `localStorage` partagé rendait le correctif 0009
+insuffisant.
+
+**Prompt / demande.** PR #6, commentaire du 2026-11-11 « Le correctif
+précédent n'a pas fonctionné… MARIE-DUP00 puis PAUL-MAR00 dans un nouvel
+onglet… » ; instructions explicites (`sessionStorage`, `cookie_appareil`,
+unicité, tests).
+
+**Réalisé.**
+
+- Jeton de connexion élève dans `sessionStorage` (`rejoindre.js`,
+  `eleve.js`), isolé par onglet ; le `localStorage` ne le porte plus.
+- `cookie_appareil` httpOnly, UUID généré côté serveur, partagé entre les
+  onglets ; `Participant.cookie_appareil` + contrainte d'unicité
+  `(session, cookie_appareil)` (migration `0009`).
+- Join : cookie déjà associé à un autre élève → `409 appareil_deja_utilise` ;
+  même élève sur le même appareil → accepté, jeton renvoyé ; même élève sur un
+  autre appareil → `409 deja_connecte`.
+- Reset professeur : `jeton_appareil` et `cookie_appareil` remis à `NULL`, et
+  cookie supprimé de la réponse ; l'appareil est libéré et les réponses sont
+  conservées.
+- Tests : `test_un_seul_appareil_actif` (même appareil, autre élève refusé),
+  `test_autre_appareil_ne_peut_pas_piloter_le_premier` (autre appareil),
+  `test_reset_prof_libere_lappareil` (cookie supprimé/libéré),
+  `test_reinitialiser_l_appareil`,
+  `test_couleurs_round_robin_et_reconnexion` (un client HTTP par élève).
+
+**Vérifications.** `pytest` (194 tests), `ruff check .`, `manage.py check`,
+`makemigrations --check`. Captures `docs/screenshots/securite-prise-controle/`
+(scénario Marie connectée / Paul refusé sur le même appareil, page reset).
+
+**Décisions.** ADR 0010 remplace 0009. L'identifiant reste public et une
+course à la toute première connexion reste possible sans PIN ; on empêche le
+partage d'un appareil entre élèves, le professeur récupère via reset.
+SPEC/ARCHITECTURE/ROADMAP non modifiés (à mettre à jour par l'humain :
+« nouvel appareil déconnecte l'ancien »). Le texte « Le PIN n'est jamais
+affiché… » de la page participants reste un reste de la V2 sans PIN, non
+modifié dans ce correctif ciblé.
+
 

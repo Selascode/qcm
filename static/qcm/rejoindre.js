@@ -26,10 +26,10 @@
         return;
       }
       corps.code_etudiant = identifiant;
-      const jeton = localStorage.getItem(cleJeton);
+      const jeton = sessionStorage.getItem(cleJeton);
       if (jeton) corps.jeton = jeton;
     } else {
-      corps.jeton = localStorage.getItem(cleJeton);
+      corps.jeton = sessionStorage.getItem(cleJeton);
     }
 
     message.textContent = "Connexion…";
@@ -46,6 +46,9 @@
         } else if (donnees.raison === "identifiant_inconnu") {
           message.textContent =
             "Identifiant inconnu. Vérifiez l'écran de pré-séance.";
+        } else if (donnees.raison === "appareil_deja_utilise") {
+          message.textContent =
+            "Cet appareil est déjà utilisé par un autre élève. Utilisez votre propre appareil.";
         } else if (donnees.raison === "deja_connecte") {
           message.textContent =
             "Identifiant déjà connecté sur un autre appareil. Demandez au professeur de réinitialiser votre appareil.";
@@ -55,7 +58,7 @@
         bouton.disabled = false;
         return;
       }
-      localStorage.setItem(cleJeton, donnees.jeton);
+      sessionStorage.setItem(cleJeton, donnees.jeton);
       window.location.href = "/eleve/" + encodeURIComponent(code) + "/";
     } catch (erreur) {
       message.textContent = "Réseau indisponible, réessayez.";
@@ -64,7 +67,7 @@
   }
 
   bouton.addEventListener("click", rejoindre);
-  if (!estGroupe && localStorage.getItem(cleJeton)) {
+  if (!estGroupe && sessionStorage.getItem(cleJeton)) {
     rejoindre();
   }
 })();

@@ -419,6 +419,12 @@ class Participant(models.Model):
         null=True,
         blank=True,
     )
+    cookie_appareil = models.UUIDField(
+        "Cookie appareil",
+        null=True,
+        blank=True,
+        editable=False,
+    )
     derniere_activite = models.DateTimeField(
         "Dernière activité",
         null=True,
@@ -443,6 +449,11 @@ class Participant(models.Model):
                 fields=["session", "student"],
                 name="unique_participant_session_student",
                 condition=models.Q(student__isnull=False),
+            ),
+            models.UniqueConstraint(
+                fields=["session", "cookie_appareil"],
+                name="unique_cookie_appareil_par_session",
+                condition=models.Q(cookie_appareil__isnull=False),
             ),
         )
 

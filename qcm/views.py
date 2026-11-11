@@ -15,6 +15,7 @@ from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from qcm import services
+from qcm.appareil import NOM_COOKIE_APPAREIL
 from qcm.couleurs import infos_couleur
 from qcm.import_participants import (
     ErreurImportParticipants,
@@ -192,12 +193,15 @@ def reinitialiser_appareil(request, code: str, participant_id: int):
         session=session,
     )
     participant.jeton_appareil = None
-    participant.save(update_fields=["jeton_appareil"])
+    participant.cookie_appareil = None
+    participant.save(update_fields=["jeton_appareil", "cookie_appareil"])
     messages.success(
         request,
         f"Appareil libéré pour {participant}. L'élève doit se reconnecter.",
     )
-    return redirect("qcm:participants", code=session.code_session)
+    reponse = redirect("qcm:participants", code=session.code_session)
+    reponse.delete_cookie(NOM_COOKIE_APPAREIL)
+    return reponse
 
 
 @login_required

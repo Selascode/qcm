@@ -18,6 +18,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from qcm import services
+from qcm.appareil import lire_cookie_appareil, poser_cookie_appareil
 from qcm.couleurs import infos_couleur
 from qcm.models import Answer, Participant, Question, Session, Student
 
@@ -69,18 +70,15 @@ def _reponse_participant(session: Session, participant: Participant) -> JsonResp
     )
 
 
-def _jeton_fourni(donnees) -> uuid.UUID | None:
-    jeton_brut = donnees.get("jeton")
-    if not jeton_brut:
-        return None
-    try:
-        return uuid.UUID(str(jeton_brut))
-    except (TypeError, ValueError, AttributeError):
-        return None
+def _rejoindre_groupe(
+    donnees, session: Session, cookie_appareil: uuid.UUID
+) -> JsonResponse:
+    """Connexion d'un élève identifié : code de session + identifiant.
 
-
-def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
-    """Connexion d'un élève identifié : code de session + identifiant."""
+    L'appareil est identifié par le cookie httpOnly partagé entre les onglets.
+    Un cookie ne peut être associé qu'à un seul ``Participant`` actif par
+    session ; le jeton élève, lui, reste stocké dans ``sessionStorage``.
+    """
     code_etudiant = str(donnees.get("code_etudiant") or "").strip()
     if not code_etudiant:
         return _erreur("identifiant_requis")
@@ -92,11 +90,10 @@ def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
     if student is None:
         return _erreur("identifiant_inconnu", 404)
 
-    jeton_fourni = _jeton_fourni(donnees)
     maintenant = timezone.now()
     with transaction.atomic():
         # Verrou de session : deux connexions simultanées ne prennent pas la
-        # même couleur Round-Robin.
+        # même couleur Round-Robin ni le même cookie appareil.
         session = Session.objects.select_for_update().get(pk=session.pk)
         participant = (
             Participant.objects.select_for_update()
@@ -104,6 +101,11 @@ def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
             .first()
         )
         if participant is None:
+            if Participant.objects.filter(
+                session=session, cookie_appareil=cookie_appareil
+            ).exists():
+                # Cet appareil est déjà rattaché à un autre élève.
+                return _erreur("appareil_deja_utilise", 409)
             try:
                 with transaction.atomic():
                     participant = Participant.objects.create(
@@ -111,35 +113,39 @@ def _rejoindre_groupe(donnees, session: Session) -> JsonResponse:
                         student=student,
                         derniere_activite=maintenant,
                         couleur_assignee=services.prochaine_couleur(session),
+                        cookie_appareil=cookie_appareil,
                     )
             except IntegrityError:
-                participant = Participant.objects.select_for_update().get(
-                    session=session,
-                    student=student,
+                participant = (
+                    Participant.objects.select_for_update()
+                    .filter(session=session, student=student)
+                    .first()
                 )
                 if (
-                    participant.jeton_appareil is not None
-                    and participant.jeton_appareil != jeton_fourni
+                    participant is None
+                    or participant.cookie_appareil != cookie_appareil
                 ):
-                    return _erreur("deja_connecte", 409)
+                    return _erreur("appareil_deja_utilise", 409)
                 participant.derniere_activite = maintenant
                 participant.save(update_fields=["derniere_activite"])
         else:
-            if participant.jeton_appareil is not None:
-                # La première connexion est propriétaire : seul le même
-                # appareil (jeton identique) peut se reconnecter.
-                if participant.jeton_appareil != jeton_fourni:
-                    return _erreur("deja_connecte", 409)
-                participant.derniere_activite = maintenant
-                participant.save(update_fields=["derniere_activite"])
-            else:
-                # Appareil libéré par le professeur : la prochaine
-                # connexion récupère un nouveau jeton.
+            if (
+                participant.cookie_appareil is not None
+                and participant.cookie_appareil != cookie_appareil
+            ):
+                # Le même élève est déjà actif sur un autre appareil.
+                return _erreur("deja_connecte", 409)
+            # Même appareil (nouvel onglet) ou appareil libéré par le reset :
+            # le jeton de session est renvoyé/renouvelé, le cookie est rattaché.
+            champs = ["cookie_appareil", "derniere_activite"]
+            participant.cookie_appareil = cookie_appareil
+            participant.derniere_activite = maintenant
+            if participant.jeton_appareil is None:
                 participant.jeton_appareil = uuid.uuid4()
-                participant.derniere_activite = maintenant
-                participant.save(
-                    update_fields=["jeton_appareil", "derniere_activite"]
-                )
+                champs.append("jeton_appareil")
+            participant.save(update_fields=champs)
+
+    return _reponse_participant(session, participant)
 
     return _reponse_participant(session, participant)
 
@@ -160,7 +166,11 @@ def rejoindre(request):
         return _erreur("code_inconnu", 404)
 
     if session.groupe_id is not None:
-        return _rejoindre_groupe(donnees, session)
+        cookie_appareil, nouveau = lire_cookie_appareil(request)
+        reponse = _rejoindre_groupe(donnees, session, cookie_appareil)
+        if nouveau:
+            poser_cookie_appareil(reponse, cookie_appareil)
+        return reponse
 
     jeton = None
     jeton_brut = donnees.get("jeton")

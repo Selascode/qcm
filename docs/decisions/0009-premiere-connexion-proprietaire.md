@@ -1,7 +1,7 @@
 # 0009 — Première connexion propriétaire de l'appareil élève
 
 - **Date** : 2026-11-11
-- **Statut** : accepté
+- **Statut** : remplacé par l'ADR 0010 (cookie appareil httpOnly)
 - **Décideur** : Selascode (validation du plan sur la PR #6)
 
 ## Contexte
