@@ -24,6 +24,11 @@ urlpatterns = [
         name="importer_eleves",
     ),
     path(
+        "ensemble/<int:set_id>/importer-questions/",
+        views.importer_questions,
+        name="importer_questions",
+    ),
+    path(
         "groupe/<int:groupe_id>/identifiants/<str:format>/",
         views.exporter_identifiants,
         name="exporter_identifiants",

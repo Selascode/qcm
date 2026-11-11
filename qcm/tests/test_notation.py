@@ -2,22 +2,22 @@
 
 import pytest
 
-from qcm.models import Choice, Question, Quiz, Step
+from qcm.models import Choice, Question, QuestionSet
 from qcm.notation import note_question, note_seance
 
 pytestmark = pytest.mark.django_db
 
 
 def _question(proprietaire, corrects, nb_choix=3, type_="multiple"):
-    quiz = Quiz.objects.create(titre="Barème", proprietaire=proprietaire)
-    step = Step.objects.create(quiz=quiz, numero=1, duree_s=60)
+    question_set = QuestionSet.objects.create(
+        nom="Barème", proprietaire=proprietaire
+    )
     question = Question.objects.create(
-        quiz=quiz,
-        step=step,
+        set=question_set,
         uid="Q1",
         enonce="Énoncé",
         type=type_,
-        couleur_slot=1,
+        duree_s=60,
     )
     for index in range(nb_choix):
         Choice.objects.create(

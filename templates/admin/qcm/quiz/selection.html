@@ -1,0 +1,103 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Accueil</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; <a href="{% url 'admin:qcm_quiz_change' original.pk %}">{{ original.titre }}</a>
+  &rsaquo; Sélectionner les questions
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <p>
+    Cochez les questions de la banque à ajouter au QCM. L'ordre d'ajout est
+    conservé : les nouvelles questions sont ajoutées à la fin de la sélection
+    actuelle. Une question déjà sélectionnée apparaît cochée et désactivée.
+  </p>
+
+  {% if messages %}
+    <ul class="messagelist">
+      {% for message in messages %}
+        <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <form method="post" action="">
+    {% csrf_token %}
+    {% for ensemble in sets %}
+      <fieldset class="module aligned">
+        <h2>{{ ensemble.nom }} ({{ ensemble.questions.count }} question(s))</h2>
+        {% for question in ensemble.questions.all %}
+          <div class="form-row">
+            <label for="question-{{ question.pk }}">
+              <input
+                type="checkbox"
+                id="question-{{ question.pk }}"
+                name="questions"
+                value="{{ question.pk }}"
+                {% if question.pk in selection_ids %}checked disabled{% endif %}
+              >
+              <strong>{{ question.uid }}</strong> — {{ question.enonce|truncatechars:100 }}
+              <span class="help">({{ question.get_type_display }}, {{ question.duree_s }} s)</span>
+            </label>
+          </div>
+        {% empty %}
+          <p>Aucune question dans cet ensemble.</p>
+        {% endfor %}
+      </fieldset>
+    {% empty %}
+      <p>Aucun ensemble de questions : créez-en un depuis l'admin, puis importez
+      ou saisissez des questions.</p>
+    {% endfor %}
+
+    <div class="submit-row">
+      <button type="submit" name="action" value="ajouter" class="default">
+        Ajouter au Quiz
+      </button>
+      <a href="{% url 'admin:qcm_quiz_change' original.pk %}" class="button cancel-link">
+        Retour au QCM
+      </a>
+    </div>
+  </form>
+
+  <fieldset class="module aligned">
+    <h2>Questions déjà sélectionnées ({{ selection|length }})</h2>
+    {% if selection %}
+      <table style="width:100%; border-collapse:collapse">
+        <thead>
+          <tr>
+            <th>Position</th>
+            <th>Question</th>
+            <th>Ensemble</th>
+            <th>Retirer</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ligne in selection %}
+            <tr>
+              <td>{{ ligne.position }}</td>
+              <td>{{ ligne.question.uid }} — {{ ligne.question.enonce|truncatechars:100 }}</td>
+              <td>{{ ligne.question.set.nom }}</td>
+              <td>
+                <form method="post" action="" style="margin:0">
+                  {% csrf_token %}
+                  <input type="hidden" name="question" value="{{ ligne.question_id }}">
+                  <button type="submit" name="action" value="retirer" class="button">
+                    Retirer
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>Aucune question sélectionnée pour ce QCM.</p>
+    {% endif %}
+  </fieldset>
+</div>
+{% endblock %}

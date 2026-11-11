@@ -1,7 +1,11 @@
-"""Admin Django : saisie des QCM et consultation des séances."""
+"""Admin Django : banque de questions, sélection et consultation des QCM."""
 
-from django.contrib import admin
-from django.urls import reverse
+from django.contrib import admin, messages
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
+from django.db.models import Max
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import path, reverse
 from django.utils.html import format_html
 
 from qcm.models import (
@@ -10,67 +14,16 @@ from qcm.models import (
     Groupe,
     Participant,
     Question,
+    QuestionSet,
     Quiz,
+    QuizQuestion,
     Session,
-    Step,
     Student,
 )
 
 admin.site.site_header = "QCM en direct"
 admin.site.site_title = "QCM en direct"
 admin.site.index_title = "Administration"
-
-
-class StepInline(admin.TabularInline):
-    model = Step
-    extra = 0
-    ordering = ("numero",)
-
-
-@admin.register(Quiz)
-class QuizAdmin(admin.ModelAdmin):
-    list_display = (
-        "titre",
-        "proprietaire",
-        "penalite_active",
-        "facteur_penalite",
-        "nb_etapes",
-        "nb_questions",
-    )
-    list_filter = ("proprietaire", "penalite_active")
-    search_fields = ("titre",)
-    inlines = (StepInline,)
-
-    @admin.display(description="Étapes")
-    def nb_etapes(self, obj: Quiz) -> int:
-        return obj.steps.count()
-
-    @admin.display(description="Questions")
-    def nb_questions(self, obj: Quiz) -> int:
-        return obj.questions.count()
-
-
-class QuestionInline(admin.TabularInline):
-    model = Question
-    extra = 0
-    fields = (
-        "uid",
-        "enonce",
-        "image",
-        "type",
-        "afficher_indice_multiple",
-        "ordre",
-        "couleur_slot",
-    )
-    ordering = ("ordre",)
-
-
-@admin.register(Step)
-class StepAdmin(admin.ModelAdmin):
-    list_display = ("quiz", "numero", "duree_s")
-    list_filter = ("quiz",)
-    ordering = ("quiz", "numero")
-    inlines = (QuestionInline,)
 
 
 class ChoiceInline(admin.TabularInline):
@@ -80,22 +33,223 @@ class ChoiceInline(admin.TabularInline):
     ordering = ("position",)
 
 
+class QuestionInline(admin.TabularInline):
+    """Questions d'un ensemble, éditables depuis la page du set."""
+
+    model = Question
+    extra = 0
+    fields = ("uid", "enonce", "type", "duree_s", "ordre")
+    ordering = ("ordre", "uid")
+    verbose_name = "Question"
+    verbose_name_plural = "Questions"
+
+
+@admin.register(QuestionSet)
+class QuestionSetAdmin(admin.ModelAdmin):
+    list_display = (
+        "nom",
+        "proprietaire",
+        "nb_questions",
+        "lien_import",
+        "date_creation",
+    )
+    list_filter = ("proprietaire",)
+    search_fields = ("nom",)
+    inlines = (QuestionInline,)
+    readonly_fields = ("lien_import",)
+
+    @admin.display(description="Questions")
+    def nb_questions(self, obj: QuestionSet) -> int:
+        return obj.questions.count()
+
+    @admin.display(description="Import")
+    def lien_import(self, obj: QuestionSet) -> str:
+        if not obj or not obj.pk:
+            return "Enregistrez l'ensemble pour importer des questions."
+        url = reverse("qcm:importer_questions", args=[obj.pk])
+        return format_html('<a href="{}">Importer</a>', url)
+
+
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ("uid", "step", "type", "couleur_slot", "ordre")
-    list_filter = ("step__quiz", "type", "couleur_slot")
-    search_fields = ("uid", "enonce")
+    list_display = ("uid", "set", "type", "duree_s", "ordre")
+    list_filter = ("set__proprietaire", "set", "type")
+    search_fields = ("uid", "enonce", "set__nom")
     inlines = (ChoiceInline,)
+    list_select_related = ("set",)
     fields = (
-        "step",
+        "set",
         "uid",
         "enonce",
         "image",
         "type",
         "afficher_indice_multiple",
+        "duree_s",
         "ordre",
-        "couleur_slot",
     )
+
+
+class QuizQuestionInline(admin.TabularInline):
+    """Sélection courante, en lecture seule, retirable depuis la page du QCM."""
+
+    model = QuizQuestion
+    extra = 0
+    fields = ("position", "question")
+    readonly_fields = ("position", "question")
+    ordering = ("position", "id")
+    can_delete = True
+    verbose_name = "Question sélectionnée"
+    verbose_name_plural = "Questions sélectionnées"
+
+    def has_add_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(Quiz)
+class QuizAdmin(admin.ModelAdmin):
+    list_display = (
+        "titre",
+        "proprietaire",
+        "penalite_active",
+        "facteur_penalite",
+        "duree_s",
+        "nb_questions",
+        "lien_selection",
+    )
+    list_filter = ("proprietaire", "penalite_active")
+    search_fields = ("titre",)
+    inlines = (QuizQuestionInline,)
+    readonly_fields = ("lien_selection",)
+    fields = (
+        "titre",
+        "proprietaire",
+        "penalite_active",
+        "facteur_penalite",
+        "duree_s",
+        "lien_selection",
+    )
+
+    @admin.display(description="Questions")
+    def nb_questions(self, obj: Quiz) -> int:
+        return obj.questions.count()
+
+    @admin.display(description="Sélection")
+    def lien_selection(self, obj: Quiz) -> str:
+        if not obj or not obj.pk:
+            return "Enregistrez le QCM pour sélectionner des questions."
+        url = reverse("admin:qcm_quiz_selection", args=[obj.pk])
+        return format_html(
+            '<a class="button" href="{}">Sélectionner les questions</a>',
+            url,
+        )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        personnalisees = [
+            path(
+                "<int:quiz_id>/selection/",
+                self.admin_site.admin_view(self.selection_view),
+                name="qcm_quiz_selection",
+            ),
+        ]
+        return personnalisees + urls
+
+    def selection_view(self, request, quiz_id: int):
+        quiz = get_object_or_404(
+            Quiz.objects.select_related("proprietaire"),
+            pk=quiz_id,
+        )
+        if not self.has_change_permission(request, quiz):
+            raise PermissionDenied("Vous ne pouvez pas modifier ce QCM.")
+        if (
+            quiz.proprietaire_id != request.user.pk
+            and not request.user.is_superuser
+        ):
+            raise PermissionDenied("Ce QCM ne vous appartient pas.")
+
+        if request.method == "POST":
+            self._traiter_panier(request, quiz)
+            return redirect("admin:qcm_quiz_selection", quiz_id=quiz.pk)
+
+        sets = (
+            QuestionSet.objects.filter(proprietaire=quiz.proprietaire)
+            .prefetch_related("questions")
+            .order_by("nom")
+        )
+        selection = list(
+            quiz.quiz_questions.select_related(
+                "question", "question__set"
+            ).order_by("position", "id")
+        )
+        contexte = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "original": quiz,
+            "title": f"Sélectionner les questions — {quiz.titre}",
+            "sets": sets,
+            "selection": selection,
+            "selection_ids": {ligne.question_id for ligne in selection},
+        }
+        return render(request, "admin/qcm/quiz/selection.html", contexte)
+
+    def _traiter_panier(self, request, quiz: Quiz) -> None:
+        action = request.POST.get("action")
+        if action == "ajouter":
+            identifiants = []
+            for valeur in request.POST.getlist("questions"):
+                if str(valeur).isdigit():
+                    identifiants.append(int(valeur))
+            questions = Question.objects.filter(
+                pk__in=identifiants,
+                set__proprietaire=quiz.proprietaire,
+            )
+            par_identifiant = {question.pk: question for question in questions}
+            deja_presents = set(
+                quiz.quiz_questions.values_list("question_id", flat=True)
+            )
+            position = (
+                quiz.quiz_questions.aggregate(maximum=Max("position"))["maximum"]
+                or 0
+            )
+            ajoutees = 0
+            with transaction.atomic():
+                for identifiant in dict.fromkeys(identifiants):
+                    if (
+                        identifiant in deja_presents
+                        or identifiant not in par_identifiant
+                    ):
+                        continue
+                    position += 1
+                    QuizQuestion.objects.create(
+                        quiz=quiz,
+                        question=par_identifiant[identifiant],
+                        position=position,
+                    )
+                    ajoutees += 1
+            if ajoutees:
+                messages.success(
+                    request,
+                    f"{ajoutees} question(s) ajoutée(s) à « {quiz.titre} ».",
+                )
+            else:
+                messages.info(request, "Aucune nouvelle question à ajouter.")
+        elif action == "retirer":
+            identifiant = request.POST.get("question")
+            if str(identifiant).isdigit():
+                with transaction.atomic():
+                    quiz.quiz_questions.filter(
+                        question_id=int(identifiant)
+                    ).delete()
+                    for position, ligne in enumerate(
+                        quiz.quiz_questions.order_by("position", "id"),
+                        start=1,
+                    ):
+                        if ligne.position != position:
+                            ligne.position = position
+                            ligne.save(update_fields=["position"])
+                messages.success(request, "Question retirée du QCM.")
+        else:
+            messages.error(request, "Action inconnue.")
 
 
 @admin.register(Choice)

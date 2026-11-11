@@ -5,7 +5,7 @@ import uuid
 import pytest
 from django.db import IntegrityError, connection, transaction
 
-from qcm.import_json import importer_quiz
+from qcm.import_questions import importer_quiz
 from qcm.models import Answer, Participant
 from qcm.tests.helpers import creer_session, donnees_quiz
 

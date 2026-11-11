@@ -1,0 +1,7 @@
+uid,enonce,type,lettre,texte,correct,duree_s
+BIN1,"Que vaut 1011 en binaire ?",unique,A,9,non,60
+BIN1,"Que vaut 1011 en binaire ?",unique,B,11,oui,60
+BIN1,"Que vaut 1011 en binaire ?",unique,C,13,non,60
+BIN2,"Quelles affirmations sont vraies sur le binaire ?",multiple,A,"Chaque chiffre vaut 0 ou 1",oui,90
+BIN2,"Quelles affirmations sont vraies sur le binaire ?",multiple,B,"Le bit de poids fort est toujours à droite",non,90
+BIN2,"Quelles affirmations sont vraies sur le binaire ?",multiple,C,"Un octet contient 8 bits",oui,90

@@ -4,7 +4,7 @@ import pytest
 from django.test import override_settings
 from django.urls import reverse
 
-from qcm.import_json import importer_quiz
+from qcm.import_questions import importer_quiz
 from qcm.tests.helpers import creer_session, donnees_quiz
 
 pytestmark = pytest.mark.django_db

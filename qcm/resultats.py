@@ -12,11 +12,12 @@ from qcm.notation import note_question, note_seance
 
 
 def _questions_du_quiz(quiz) -> list:
-    return list(
-        quiz.questions.select_related("step")
-        .prefetch_related("choices")
-        .order_by("step__numero", "ordre", "id")
-    )
+    return [
+        ligne.question
+        for ligne in quiz.quiz_questions.select_related("question")
+        .prefetch_related("question__choices")
+        .order_by("position", "id")
+    ]
 
 
 def calculer_resultats(session) -> dict:

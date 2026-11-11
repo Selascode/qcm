@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 
 from qcm import services
-from qcm.import_json import importer_quiz
+from qcm.import_questions import importer_quiz
 from qcm.models import Session
 from qcm.tests.helpers import (
     creer_session,

@@ -5,7 +5,7 @@ import uuid
 
 import pytest
 
-from qcm.import_json import importer_quiz
+from qcm.import_questions import importer_quiz
 from qcm.models import Answer, Participant
 from qcm.services import (
     compter_reponses_par_question,

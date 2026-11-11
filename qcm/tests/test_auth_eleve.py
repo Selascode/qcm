@@ -7,7 +7,7 @@ from django.test import Client
 from django.urls import reverse
 
 from qcm.appareil import NOM_COOKIE_APPAREIL
-from qcm.import_json import importer_quiz
+from qcm.import_questions import importer_quiz
 from qcm.models import Participant, Session
 from qcm.tests.helpers import (
     creer_eleve,

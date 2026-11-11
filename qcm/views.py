@@ -14,7 +14,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
-from qcm import services
+from qcm import import_questions, services
 from qcm.appareil import NOM_COOKIE_APPAREIL
 from qcm.couleurs import infos_couleur
 from qcm.import_participants import (
@@ -22,7 +22,7 @@ from qcm.import_participants import (
     charger_fichier,
     importer_participants,
 )
-from qcm.models import Groupe, Participant, Quiz, Session
+from qcm.models import Groupe, Participant, QuestionSet, Quiz, Session
 from qcm.resultats import calculer_resultats
 
 
@@ -50,10 +50,10 @@ def _cartes_etape(session: Session) -> tuple[list, int]:
             cartes = [
                 {
                     "question": question,
-                    "couleur": infos_couleur(question.couleur_slot),
+                    "couleur": infos_couleur(position),
                     "nb_reponses": compteurs.get(question.pk, 0),
                 }
-                for question in questions
+                for position, question in enumerate(questions, start=1)
             ]
             nb_reponses_etape = sum(compteurs.values())
     return cartes, nb_reponses_etape
@@ -269,6 +269,57 @@ def importer_eleves(request, groupe_id: int):
         request,
         "qcm/importer_eleves.html",
         {"groupe": groupe, "resultats": resultats},
+    )
+
+
+@login_required
+def importer_questions(request, set_id: int):
+    """Import JSON/CSV de questions dans un ensemble de la banque."""
+    sets = QuestionSet.objects.filter(proprietaire=request.user).order_by("nom")
+    question_set = get_object_or_404(sets, pk=set_id)
+    resultats = []
+    if request.method == "POST":
+        set_choisi = request.POST.get("set")
+        if set_choisi:
+            question_set = get_object_or_404(sets, pk=set_choisi)
+        fichier = request.FILES.get("fichier")
+        if fichier is None:
+            messages.error(request, "Choisissez un fichier JSON ou CSV.")
+        else:
+            suffixe = Path(fichier.name).suffix.lower()
+            if suffixe not in (".json", ".csv"):
+                messages.error(
+                    request,
+                    "Format non reconnu : utilisez un fichier .json ou .csv.",
+                )
+            else:
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=suffixe
+                ) as tampon:
+                    for bloc in fichier.chunks():
+                        tampon.write(bloc)
+                    chemin = Path(tampon.name)
+                try:
+                    donnees = import_questions.charger_fichier_questions(chemin)
+                    resultats = import_questions.importer_questions(donnees, question_set)
+                    messages.success(
+                        request,
+                        f"{len(resultats)} question(s) importée(s) dans "
+                        f"« {question_set.nom} ».",
+                    )
+                except import_questions.ErreurImport as exc:
+                    for message in exc.messages:
+                        messages.error(request, message)
+                finally:
+                    chemin.unlink(missing_ok=True)
+    return render(
+        request,
+        "qcm/importer_questions.html",
+        {
+            "question_set": question_set,
+            "sets": sets,
+            "resultats": resultats,
+        },
     )
 
 

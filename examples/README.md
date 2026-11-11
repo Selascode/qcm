@@ -1,5 +1,28 @@
 # Exemples de données
 
+## Questions (V3)
+
+`questions_demo.json` et `questions_demo.csv` contiennent deux questions
+(une unique, une multiple) pour la banque de questions. Ils sont acceptés par
+l'interface web d'import de questions et par la commande `import_quiz`.
+
+### Importer dans un ensemble
+
+1. Admin → « Ensembles de questions » → « Ajouter » : créer un ensemble
+   (nom, propriétaire = professeur connecté).
+2. Dans la liste des ensembles, cliquer sur « Importer » (ou ouvrir
+   `/ensemble/<id>/importer-questions/`) et déposer
+   `questions_demo.json` ou `questions_demo.csv`. L'ensemble de destination
+   peut être changé dans le formulaire ; l'import est transactionnel et affiche
+   le nombre de questions créées.
+3. Sur la page d'un QCM, cliquer sur « Sélectionner les questions », cocher les
+   questions puis « Ajouter au Quiz » ; l'ordre d'ajout est conservé.
+
+Format JSON : `{"questions": [{"uid": "Q1", "enonce": "…", "type":
+"unique", "duree_s": 60, "choix": [...]}]}` (liste racine acceptée, anciens
+champs `titre` et `etape` ignorés). Format CSV : une ligne par choix, en-tête
+`uid,enonce,type,lettre,texte,correct[,duree_s]`.
+
 ## Groupe d'élèves (V2)
 
 `groupe_demo.csv` et `groupe_demo.json` contiennent les 6 élèves du groupe

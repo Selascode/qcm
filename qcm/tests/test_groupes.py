@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.urls import reverse
 
-from qcm.import_json import importer_quiz
+from qcm.import_questions import importer_quiz
 from qcm.models import Groupe, Participant, Session
 from qcm.tests.helpers import creer_eleve, creer_groupe, donnees_quiz
 

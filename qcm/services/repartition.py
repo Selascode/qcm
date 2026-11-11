@@ -2,9 +2,9 @@
 
 Un paquet de T questions génère T étapes virtuelles identiques : à chaque
 étape, la couleur de l'élève tourne, ce qui l'oblige à répondre à une question
-différente du paquet. Le modèle garde une seule ligne ``Step`` par paquet (et
-une seule ligne ``Question`` par question) ; les étapes virtuelles sont
-calculées par les services, sans duplication de données.
+différente du paquet. La sélection ordonnée vit dans ``QuizQuestion`` ; les
+étapes et leurs paquets sont recalculés à la volée, sans duplication de
+données.
 """
 
 from dataclasses import dataclass
