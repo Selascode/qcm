@@ -4,8 +4,8 @@ Application web Django pour faire répondre une classe à un QCM projeté au
 tableau. Les élèves répondent depuis leur téléphone **sans jamais voir
 l'énoncé** ; le serveur est la seule référence temporelle.
 
-Ce dépôt couvre la V1 (ticket #1 et dette #3) et la V2 (comptes, groupes,
-notes) :
+Ce dépôt couvre la V1 (ticket #1 et dette #3), la V2 (comptes, groupes,
+notes) et la V3 (banque de questions, import et sélection) :
 
 - import JSON d'un QCM (format `docs/SPEC.md`) et saisie via l'admin ;
 - code de session + QR code, salon d'attente ;
@@ -24,7 +24,9 @@ notes) :
 - tests du refus tardif, du doublon, de la reconnexion et de l'absence de
   fuite d'énoncé ;
 - V2 : comptes élèves sans PIN, import CSV/JSON (interface Groupe et CLI),
-  rotation des questions par blocs, mode Présentation et écran de pré-séance.
+  rotation des questions par blocs, mode Présentation et écran de pré-séance ;
+- V3 : banque de questions par professeur (`QuestionSet`), import JSON/CSV de
+  questions, sélection ordonnée par QCM et durée par question.
 
 ## Installation (dev / démo)
 
@@ -73,6 +75,29 @@ python manage.py import_quiz examples/quiz_demo.json --proprietaire <utilisateur
   toutes les questions du paquet.
 - Le tableau propose un « Mode Présentation » plein écran (questions, timer et
   compteurs, sans contrôles).
+
+## V3 — banque de questions et sélection
+
+- Admin → « Ensembles de questions » : le professeur crée ses ensembles, saisit
+  les questions et leurs choix, et importe un fichier depuis le lien
+  « Importer » de chaque ensemble (ou `/ensemble/<id>/importer-questions/`).
+- Import JSON : `{"questions": [{"uid": "Q1", "enonce": "…", "type":
+  "unique", "duree_s": 60, "choix": [...]}]}`. La racine peut aussi être une
+  liste ; les anciens champs `titre` et `etape` sont ignorés. Import CSV : une
+  ligne par choix, en-tête
+  `uid,enonce,type,lettre,texte,correct[,duree_s]`. Exemples :
+  `examples/questions_demo.json` et `examples/questions_demo.csv`.
+- Sur la page d'un QCM, le bouton « Sélectionner les questions » ouvre un
+  panier groupé par ensemble : cocher puis « Ajouter au Quiz » ajoute à la fin
+  dans l'ordre choisi ; la page du QCM affiche la liste courante et permet de
+  retirer une question.
+- `Quiz.duree_s` (60 s par défaut) est une durée minimale d'étape ;
+  `Question.duree_s` permet d'allonger une question complexe. Une étape dure
+  le maximum entre la durée du QCM et celles des questions du paquet.
+- La commande historique
+  `python manage.py import_quiz examples/quiz_demo.json --proprietaire <user>`
+  reste disponible : elle crée un ensemble et un QCM qui sélectionne toutes
+  les questions du fichier.
 
 ## Accès depuis un téléphone (Wi-Fi local)
 

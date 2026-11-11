@@ -5,7 +5,7 @@ import uuid
 import pytest
 from django.urls import reverse
 
-from qcm.import_json import importer_quiz
+from qcm.import_questions import importer_quiz
 from qcm.models import Answer, Participant, Session
 from qcm.resultats import calculer_resultats
 from qcm.tests.helpers import creer_eleve

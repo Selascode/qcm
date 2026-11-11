@@ -1,8 +1,8 @@
 """Palette de couleurs et symboles de la V1.
 
 Quatre couleurs, chacune doublée d'un symbole : le symbole porte l'information
-même en cas de daltonisme (SPEC §4). La couleur d'une question est un indice de
-colonne (``Question.couleur_slot``), pas l'identité d'un élève.
+même en cas de daltonisme (SPEC §4). La couleur d'une question est sa position
+1..T dans le paquet affiché, pas l'identité d'un élève.
 """
 
 COULEURS = {

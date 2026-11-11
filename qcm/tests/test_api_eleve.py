@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from qcm.import_json import importer_quiz
+from qcm.import_questions import importer_quiz
 from qcm.models import Participant
 from qcm.services import mettre_en_pause, reprendre
 from qcm.tests.helpers import (

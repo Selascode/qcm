@@ -1,0 +1,27 @@
+{
+  "questions": [
+    {
+      "uid": "BIN1",
+      "enonce": "Que vaut $1011_2$ en décimal ?",
+      "type": "unique",
+      "duree_s": 60,
+      "choix": [
+        {"lettre": "A", "texte": "9", "correct": false},
+        {"lettre": "B", "texte": "11", "correct": true},
+        {"lettre": "C", "texte": "13", "correct": false}
+      ]
+    },
+    {
+      "uid": "BIN2",
+      "enonce": "Quelles affirmations sont vraies sur le binaire ?",
+      "type": "multiple",
+      "duree_s": 90,
+      "afficher_indice_multiple": true,
+      "choix": [
+        {"lettre": "A", "texte": "Chaque chiffre vaut 0 ou 1", "correct": true},
+        {"lettre": "B", "texte": "Le bit de poids fort est toujours à droite", "correct": false},
+        {"lettre": "C", "texte": "Un octet contient 8 bits", "correct": true}
+      ]
+    }
+  ]
+}

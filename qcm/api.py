@@ -52,8 +52,8 @@ def _participant(request):
     return participant
 
 
-def _couleur_question(question: Question) -> dict:
-    return infos_couleur(question.couleur_slot)
+def _couleur_position(position: int) -> dict:
+    return infos_couleur(position)
 
 
 def _reponse_participant(session: Session, participant: Participant) -> JsonResponse:
@@ -147,8 +147,6 @@ def _rejoindre_groupe(
 
     return _reponse_participant(session, participant)
 
-    return _reponse_participant(session, participant)
-
 
 @csrf_exempt
 @require_POST
@@ -201,8 +199,8 @@ def rejoindre(request):
     return _reponse_participant(session, participant)
 
 
-def _etat_question(participant, question) -> dict:
-    couleur = _couleur_question(question)
+def _etat_question(participant, question, position: int) -> dict:
+    couleur = _couleur_position(position)
     return {
         "couleur": couleur,
         "symbole": couleur["symbole"],
@@ -253,7 +251,13 @@ def etat_eleve(request):
         if question is None:
             etat.update(_etat_sans_question())
         else:
-            etat.update(_etat_question(participant, question))
+            position = services.position_question_dans_etape(
+                session, session.etape_courante, question
+            )
+            if position is None:
+                etat.update(_etat_sans_question())
+            else:
+                etat.update(_etat_question(participant, question, position))
         return JsonResponse(etat)
 
     return JsonResponse(
@@ -395,7 +399,7 @@ def _questions_prof(session: Session) -> list[dict]:
         return []
     compteurs = services.compter_reponses_par_question(session, questions)
     resultat = []
-    for question in questions:
+    for position, question in enumerate(questions, start=1):
         resultat.append(
             {
                 "id": question.pk,
@@ -403,7 +407,7 @@ def _questions_prof(session: Session) -> list[dict]:
                 "enonce": question.enonce,
                 "type": question.type,
                 "image": question.image.url if question.image else None,
-                "couleur": _couleur_question(question),
+                "couleur": _couleur_position(position),
                 "nb_reponses": compteurs.get(question.pk, 0),
                 "choix": [
                     {

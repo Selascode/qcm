@@ -1,15 +1,18 @@
-"""Commande d'import d'un QCM au format JSON (SPEC §5)."""
+"""Commande d'import d'un QCM historique (JSON) dans la banque de questions."""
 
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
-from qcm.import_json import ErreurImport, charger_fichier, importer_quiz
+from qcm.import_questions import ErreurImport, charger_fichier_json, importer_quiz
 
 
 class Command(BaseCommand):
-    help = "Importe un QCM depuis un fichier JSON et l'attribue à un professeur."
+    help = (
+        "Importe un QCM depuis un fichier JSON : crée un ensemble de questions "
+        "et un QCM qui les sélectionne, pour un professeur."
+    )
 
     def add_arguments(self, parser) -> None:
         parser.add_argument("fichier", type=Path, help="Chemin du fichier JSON.")
@@ -29,7 +32,7 @@ class Command(BaseCommand):
             ) from exc
 
         try:
-            donnees = charger_fichier(options["fichier"])
+            donnees = charger_fichier_json(options["fichier"])
             quiz = importer_quiz(donnees, proprietaire)
         except ErreurImport as exc:
             for message in exc.messages:
@@ -39,7 +42,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"QCM importé : {quiz.titre} (id={quiz.pk}, "
-                f"{quiz.steps.count()} étapes, "
-                f"{quiz.questions.count()} questions)"
+                f"{quiz.questions.count()} questions, ensemble "
+                f"« {quiz.quiz_questions.first().question.set.nom} »)"
             )
         )

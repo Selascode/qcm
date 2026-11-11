@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.db import connections
 from django.test import Client
 
-from qcm.import_json import importer_quiz
+from qcm.import_questions import importer_quiz
 from qcm.models import Answer, Participant, Session
 from qcm.tests.helpers import (
     creer_session,

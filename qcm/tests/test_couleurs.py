@@ -3,7 +3,7 @@
 import pytest
 
 from qcm.couleurs import COULEURS, NB_COULEURS
-from qcm.import_json import importer_quiz
+from qcm.import_questions import importer_quiz
 from qcm.models import Participant, Session
 from qcm.services import lettres_melangees, question_courante_pour
 from qcm.tests.helpers import creer_session, demarrer, donnees_quiz

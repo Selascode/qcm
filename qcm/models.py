@@ -1,15 +1,17 @@
-"""Modèle de données du QCM (V2).
+"""Modèle de données du QCM (V3).
 
 Invariants respectés (AGENTS.md §3) :
 - ``Answer`` a une contrainte unique ``(participant, question)`` ;
 - ``Answer.source`` et ``Answer.id_client`` sont conservés ;
 - ``Session.ends_at`` est la seule référence temporelle ;
 - ``Participant.couleur_assignee`` et ``Participant.graine_melange`` sont persistés ;
-- ``Question.uid`` est unique par quiz ;
-- la durée est portée par ``Step``, pas par ``Question``.
+- ``Question.uid`` est unique par ``QuestionSet`` ;
+- la durée est portée par l'étape générée (``Quiz.duree_s`` et ``Question.duree_s``),
+  jamais stockée sur une ligne ``Step``.
 
-V2 ajoute les groupes, les élèves identifiés (``Student``) et le barème
-configurable par QCM. ``Session.groupe`` reste nullable pour la démo.
+V3 transforme les questions en banque réutilisable : chaque ``Question``
+appartient à un ``QuestionSet`` et un ``Quiz`` en sélectionne une liste ordonnée
+(``QuizQuestion``). Les étapes restent virtuelles et sont recalculées à la volée.
 """
 
 import secrets
@@ -90,6 +92,26 @@ class Quiz(models.Model):
             "strictement supérieur à 0."
         ),
     )
+    duree_s = models.PositiveIntegerField(
+        "Durée par étape (s)",
+        default=60,
+        validators=[MinValueValidator(1)],
+        help_text=(
+            "Durée minimale d'une étape. Une étape prend la durée de la "
+            "question la plus longue qu'elle affiche."
+        ),
+    )
+    questions = models.ManyToManyField(
+        "Question",
+        through="QuizQuestion",
+        related_name="quizzes",
+        blank=True,
+        verbose_name="Questions",
+        help_text=(
+            "Sélection ordonnée des questions de la banque pour cette séance. "
+            "Utilisez « Sélectionner les questions » sur la page du QCM."
+        ),
+    )
 
     class Meta:
         ordering = ("titre",)
@@ -100,35 +122,31 @@ class Quiz(models.Model):
         return self.titre
 
 
-class Step(models.Model):
-    quiz = models.ForeignKey(
-        Quiz,
+class QuestionSet(models.Model):
+    """Banque de questions réutilisable, propre à un professeur."""
+
+    nom = models.CharField("Nom", max_length=200)
+    proprietaire = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="steps",
-        verbose_name="QCM",
+        related_name="question_sets",
+        verbose_name="Propriétaire",
     )
-    numero = models.PositiveSmallIntegerField(
-        "Numéro",
-        validators=[MinValueValidator(1)],
-    )
-    duree_s = models.PositiveIntegerField(
-        "Durée (s)",
-        validators=[MinValueValidator(1)],
-    )
+    date_creation = models.DateTimeField("Date de création", auto_now_add=True)
 
     class Meta:
-        ordering = ("numero",)
-        verbose_name = "Étape"
-        verbose_name_plural = "Étapes"
+        ordering = ("nom",)
+        verbose_name = "Ensemble de questions"
+        verbose_name_plural = "Ensembles de questions"
         constraints = (
             models.UniqueConstraint(
-                fields=["quiz", "numero"],
-                name="unique_step_numero_par_quiz",
+                fields=["proprietaire", "nom"],
+                name="unique_question_set_nom_par_proprietaire",
             ),
         )
 
     def __str__(self) -> str:
-        return f"Étape {self.numero} — {self.duree_s} s"
+        return self.nom
 
 
 class Question(models.Model):
@@ -139,20 +157,11 @@ class Question(models.Model):
         (TYPE_MULTIPLE, "Choix multiple"),
     )
 
-    # FK dénormalisée : elle garantit l'unicité (quiz, uid) au niveau base,
-    # que la hiérarchie Step→Question ne permettrait pas d'exprimer.
-    quiz = models.ForeignKey(
-        Quiz,
-        on_delete=models.CASCADE,
+    set = models.ForeignKey(
+        QuestionSet,
+        on_delete=models.PROTECT,
         related_name="questions",
-        editable=False,
-        verbose_name="QCM",
-    )
-    step = models.ForeignKey(
-        Step,
-        on_delete=models.CASCADE,
-        related_name="questions",
-        verbose_name="Étape",
+        verbose_name="Ensemble",
     )
     uid = models.CharField("Identifiant", max_length=64)
     enonce = models.TextField("Énoncé")
@@ -172,10 +181,14 @@ class Question(models.Model):
         validators=[MinValueValidator(1)],
         default=1,
     )
-    couleur_slot = models.PositiveSmallIntegerField(
-        "Emplacement couleur",
-        validators=[MinValueValidator(1), MaxValueValidator(NB_COULEURS)],
-        default=1,
+    duree_s = models.PositiveIntegerField(
+        "Durée (s)",
+        default=60,
+        validators=[MinValueValidator(1)],
+        help_text=(
+            "Durée de la question si elle est la plus longue de l'étape "
+            "(60 s par défaut)."
+        ),
     )
 
     class Meta:
@@ -184,40 +197,22 @@ class Question(models.Model):
         verbose_name_plural = "Questions"
         constraints = (
             models.UniqueConstraint(
-                fields=["quiz", "uid"],
-                name="unique_question_uid_par_quiz",
+                fields=["set", "uid"],
+                name="unique_question_uid_par_set",
             ),
         )
 
     def clean(self) -> None:
         super().clean()
-        if self.step_id:
-            try:
-                etape = self.step
-            except Step.DoesNotExist:
-                etape = None
-            if etape is not None:
-                self.quiz = etape.quiz
-                autres = Question.objects.filter(step_id=self.step_id)
-                if self.pk:
-                    autres = autres.exclude(pk=self.pk)
-                if autres.count() >= 4:
-                    raise ValidationError(
-                        {"step": "Une étape ne peut pas contenir plus de 4 questions."}
-                    )
-        if self.quiz_id and self.uid:
-            doublon = Question.objects.filter(quiz_id=self.quiz_id, uid=self.uid)
+        if self.set_id and self.uid:
+            doublon = Question.objects.filter(set_id=self.set_id, uid=self.uid)
             if self.pk:
                 doublon = doublon.exclude(pk=self.pk)
             if doublon.exists():
                 raise ValidationError(
-                    {"uid": "Cet identifiant de question existe déjà dans ce QCM."}
+                    {"uid": "Cet identifiant de question existe déjà dans "
+                     "cet ensemble."}
                 )
-
-    def save(self, *args, **kwargs) -> None:
-        if self.step_id:
-            self.quiz_id = self.step.quiz_id
-        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.uid} — {self.enonce[:60]}"
@@ -248,6 +243,41 @@ class Choice(models.Model):
 
     def __str__(self) -> str:
         return f"{self.lettre}. {self.texte[:60]}"
+
+
+class QuizQuestion(models.Model):
+    """Sélection ordonnée d'une question de la banque dans un QCM."""
+
+    quiz = models.ForeignKey(
+        Quiz,
+        on_delete=models.CASCADE,
+        related_name="quiz_questions",
+        verbose_name="QCM",
+    )
+    question = models.ForeignKey(
+        Question,
+        on_delete=models.CASCADE,
+        related_name="quiz_questions",
+        verbose_name="Question",
+    )
+    position = models.PositiveSmallIntegerField(
+        "Position",
+        validators=[MinValueValidator(1)],
+    )
+
+    class Meta:
+        ordering = ("position", "id")
+        verbose_name = "Question sélectionnée"
+        verbose_name_plural = "Questions sélectionnées"
+        constraints = (
+            models.UniqueConstraint(
+                fields=["quiz", "question"],
+                name="unique_question_par_quiz",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.position}. {self.question.uid}"
 
 
 class Groupe(models.Model):
