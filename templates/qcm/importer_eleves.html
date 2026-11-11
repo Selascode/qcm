@@ -33,9 +33,11 @@
   <section class="bloc-resultats">
     <h2>Fichier CSV ou JSON</h2>
     <p class="aide">
-      CSV : en-tête <code>nom,prenom</code>. JSON : liste d'objets
-      <code>{"nom": "…", "prenom": "…"}</code>. Les doublons et les erreurs de
-      format sont refusés ; l'import est transactionnel.
+      CSV : en-tête <code>nom,prenom</code> et colonne facultative
+      <code>identifiant_insa</code>. JSON : liste d'objets
+      <code>{"nom": "…", "prenom": "…", "identifiant_insa": "…"}</code>.
+      Les doublons et les erreurs de format sont refusés ; l'import est
+      transactionnel.
     </p>
     <form method="post" enctype="multipart/form-data" class="form-import">
       {% csrf_token %}
@@ -62,7 +64,12 @@
       <div class="table-scroll">
         <table class="table-prof">
           <thead>
-            <tr><th>Nom</th><th>Prénom</th><th>Identifiant</th></tr>
+            <tr>
+              <th>Nom</th>
+              <th>Prénom</th>
+              <th>Identifiant</th>
+              <th>Identifiant INSA</th>
+            </tr>
           </thead>
           <tbody>
             {% for eleve in resultats %}
@@ -70,6 +77,9 @@
                 <td>{{ eleve.nom }}</td>
                 <td>{{ eleve.prenom }}</td>
                 <td class="identifiant">{{ eleve.code_etudiant }}</td>
+                <td class="identifiant">
+                  {{ eleve.identifiant_insa|default:"—" }}
+                </td>
               </tr>
             {% endfor %}
           </tbody>

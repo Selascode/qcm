@@ -1,0 +1,183 @@
+{% extends "qcm/base.html" %}
+{% load static %}
+{% block title %}Saisie papier — {{ session.quiz.titre }}{% endblock %}
+{% block body_class %}page-prof{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'qcm/prof.css' %}">
+{% endblock %}
+{% block content %}
+<main class="prof-app">
+  <header class="barre-prof">
+    <div>
+      <p class="sur-titre">Séance {{ session.code_session }}</p>
+      <h1>Saisie papier — {{ session.quiz.titre }}</h1>
+      <p class="sous-titre">
+        Saisie groupée des réponses d'un élève, ou import d'un fichier CSV.
+      </p>
+    </div>
+    <nav class="liens-prof" aria-label="Navigation de la séance">
+      <a class="bouton-secondaire" href="{% url 'qcm:tableau' session.code_session %}">
+        Tableau
+      </a>
+      <a class="bouton-secondaire" href="{% url 'qcm:resultats' session.code_session %}">
+        Voir les résultats
+      </a>
+      <a class="bouton-secondaire" href="{% url 'qcm:participants' session.code_session %}">
+        Participants
+      </a>
+    </nav>
+  </header>
+
+  {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+
+  <section class="bloc-resultats">
+    <h2>Choisir un élève</h2>
+    <p class="aide">
+      La liste contient les élèves du groupe de la séance. Ceux qui n'ont pas
+      encore de participant sont signalés ; choisir un élève existant permet de
+      compléter ses réponses papier.
+    </p>
+    <form method="get" class="form-choix-eleve">
+      <label for="eleve">Élève</label>
+      <select name="eleve" id="eleve" required>
+        <option value="">— Choisir un élève —</option>
+        {% for option in eleves %}
+          <option
+            value="{{ option.student.pk }}"
+            {% if eleve and eleve.pk == option.student.pk %}selected{% endif %}
+          >
+            {{ option.student.nom }} {{ option.student.prenom }}
+            ({{ option.student.code_etudiant }})
+            {% if option.participant %} — participant{% else %} — sans participant{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="bouton-secondaire">Afficher</button>
+    </form>
+
+    <form method="post" class="form-lier-eleve">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="lier">
+      <label for="identifiant">
+        Élève absent de la liste ? Rechercher par identifiant
+      </label>
+      <input
+        type="text"
+        name="identifiant"
+        id="identifiant"
+        placeholder="Code ou identifiant INSA"
+        autocomplete="off"
+        required
+      >
+      <button type="submit" class="bouton-secondaire">
+        Rechercher et lier
+      </button>
+    </form>
+  </section>
+
+  {% if eleve %}
+    <section class="bloc-resultats">
+      <h2>Réponses papier — {{ eleve.prenom }} {{ eleve.nom }}</h2>
+      <p class="aide">
+        Identifiant <code>{{ eleve.code_etudiant }}</code>
+        {% if eleve.identifiant_insa %}
+          · INSA <code>{{ eleve.identifiant_insa }}</code>
+        {% endif %}
+        {% if participant %} · participant de la séance{% else %} · participant créé à l'enregistrement{% endif %}.
+        Les réponses venant de l'application sont verrouillées : l'application
+        prime.
+      </p>
+      <form method="post" class="form-papier">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="enregistrer">
+        <input type="hidden" name="eleve" value="{{ eleve.pk }}">
+        {% for ligne in lignes %}
+          <fieldset class="question-papier">
+            <legend>
+              <span class="identifiant">{{ ligne.question.uid }}</span>
+              {{ ligne.question.enonce }}
+            </legend>
+            {% if ligne.est_app %}
+              <p class="verrou-app">
+                Réponse application :
+                <strong>{{ ligne.choix|join:", " }}</strong>
+                — non modifiable (l'application prime).
+              </p>
+            {% else %}
+              <div class="choix-papier">
+                {% for choix in ligne.question.choices.all %}
+                  <label class="choix-papier-item">
+                    {% if ligne.question.type == "multiple" %}
+                      <input
+                        type="checkbox"
+                        name="q_{{ ligne.question.pk }}"
+                        value="{{ choix.lettre }}"
+                        {% if choix.lettre in ligne.choix %}checked{% endif %}
+                      >
+                    {% else %}
+                      <input
+                        type="radio"
+                        name="q_{{ ligne.question.pk }}"
+                        value="{{ choix.lettre }}"
+                        {% if choix.lettre in ligne.choix %}checked{% endif %}
+                      >
+                    {% endif %}
+                    <span class="lettre">{{ choix.lettre }}</span>
+                    <span>{{ choix.texte }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+              {% if ligne.source == "papier" %}
+                <p class="aide">
+                  Une réponse papier existe déjà : elle sera mise à jour si
+                  vous changez la sélection.
+                </p>
+              {% endif %}
+            {% endif %}
+          </fieldset>
+        {% empty %}
+          <p class="message-info">
+            Aucune question dans le QCM de cette séance.
+          </p>
+        {% endfor %}
+        <button type="submit" class="bouton-principal">
+          Enregistrer les réponses papier
+        </button>
+      </form>
+    </section>
+  {% else %}
+    <p class="message-info">
+      Choisissez un élève ci-dessus pour saisir ses réponses papier.
+    </p>
+  {% endif %}
+
+  <section class="bloc-resultats">
+    <h2>Importer des réponses papier (CSV)</h2>
+    <p class="aide">
+      Format attendu : <code>identifiant,uid_question,lettre_choisie</code>.
+      L'identifiant peut être le code de connexion ou l'identifiant INSA.
+      Pour une question à choix multiple, plusieurs lettres sont acceptées
+      (<code>AC</code> ou <code>A C</code>). Les réponses venant de
+      l'application sont ignorées ; l'import est transactionnel.
+    </p>
+    <form method="post" enctype="multipart/form-data" class="form-import">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="importer">
+      {% if eleve %}
+        <input type="hidden" name="eleve" value="{{ eleve.pk }}">
+      {% endif %}
+      <input type="file" name="fichier" accept=".csv" required>
+      <button type="submit" class="bouton-principal">Importer</button>
+    </form>
+  </section>
+
+  <p class="note-bas">
+    Les réponses papier sont enregistrées avec <code>source = "papier"</code>.
+    Une réponse de l'application déjà présente n'est jamais remplacée.
+  </p>
+</main>
+{% endblock %}

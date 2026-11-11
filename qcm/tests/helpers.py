@@ -122,11 +122,13 @@ def creer_eleve(
     nom: str = "Dupont",
     prenom: str = "Marie",
     code_etudiant: str = "MD0001",
+    identifiant_insa: str | None = None,
 ) -> Student:
     return Student.objects.create(
         nom=nom,
         prenom=prenom,
         code_etudiant=code_etudiant,
+        identifiant_insa=identifiant_insa,
         groupe=groupe,
     )
 

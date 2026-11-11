@@ -4,25 +4,44 @@ import csv
 import io
 import json
 import tempfile
+import uuid
 from pathlib import Path
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from qcm import import_questions, services
 from qcm.appareil import NOM_COOKIE_APPAREIL
 from qcm.couleurs import infos_couleur
+from qcm.exports import exporter_detail_csv, exporter_notes_csv
+from qcm.import_papier import (
+    ErreurImportPapier,
+    analyser_reponses,
+    importer_reponses,
+    trouver_etudiant,
+)
 from qcm.import_participants import (
     ErreurImportParticipants,
     charger_fichier,
     importer_participants,
 )
-from qcm.models import Groupe, Participant, QuestionSet, Quiz, Session
+from qcm.models import (
+    Answer,
+    Groupe,
+    Participant,
+    Question,
+    QuestionSet,
+    Quiz,
+    Session,
+    Student,
+)
 from qcm.resultats import calculer_resultats
 
 
@@ -179,6 +198,308 @@ def resultats(request, code: str):
         request,
         "qcm/resultats.html",
         {"session": session, **donnees},
+    )
+
+
+def _reponse_csv(contenu: str, nom_fichier: str) -> HttpResponse:
+    reponse = HttpResponse(contenu, content_type="text/csv; charset=utf-8")
+    reponse["Content-Disposition"] = f'attachment; filename="{nom_fichier}"'
+    return reponse
+
+
+@login_required
+def exporter_resultats_notes(request, code: str):
+    """Export CSV des notes par élève, avec une colonne par question."""
+    session = _session_prof(request, code)
+    contenu = exporter_notes_csv(session)  # BOM UTF-8 et virgule
+    return _reponse_csv(
+        contenu, f"notes_{session.code_session}.csv"
+    )
+
+
+@login_required
+def exporter_resultats_detail(request, code: str):
+    """Export CSV du détail par élève et par question."""
+    session = _session_prof(request, code)
+    contenu = exporter_detail_csv(session)  # BOM UTF-8 et virgule
+    return _reponse_csv(
+        contenu, f"detail_{session.code_session}.csv"
+    )
+
+
+def _eleve_demande(request):
+    valeur = request.POST.get("eleve") or request.GET.get("eleve")
+    if not valeur or not str(valeur).isdigit():
+        return None
+    return Student.objects.filter(pk=int(valeur)).first()
+
+
+def _options_eleves(session, eleve, participant):
+    """Élèves proposés dans la liste, avec leur participant éventuel."""
+    if session.groupe_id:
+        etudiants = list(
+            Student.objects.filter(groupe_id=session.groupe_id).order_by(
+                "nom", "prenom"
+            )
+        )
+    else:
+        etudiants = list(Student.objects.all().order_by("nom", "prenom"))
+
+    participants = {
+        lien.student_id: lien
+        for lien in session.participants.filter(student__isnull=False)
+    }
+    options = [
+        {"student": etudiant, "participant": participants.get(etudiant.pk)}
+        for etudiant in etudiants
+    ]
+    if eleve is not None and all(
+        option["student"].pk != eleve.pk for option in options
+    ):
+        options.append({"student": eleve, "participant": participant})
+        options.sort(
+            key=lambda option: (
+                option["student"].nom.casefold(),
+                option["student"].prenom.casefold(),
+            )
+        )
+    return options
+
+
+def _lignes_papier(participant, questions):
+    """Questions du QCM avec la réponse existante du participant, le cas échéant."""
+    reponses = {}
+    if participant is not None:
+        reponses = {
+            reponse.question_id: reponse
+            for reponse in Answer.objects.filter(participant=participant)
+        }
+    lignes = []
+    for question in questions:
+        reponse = reponses.get(question.pk)
+        lignes.append(
+            {
+                "question": question,
+                "reponse": reponse,
+                "choix": reponse.choix_selectionnes if reponse else [],
+                "source": reponse.source if reponse else None,
+                "est_app": (
+                    reponse is not None
+                    and reponse.source == Answer.SOURCE_APP
+                ),
+            }
+        )
+    return lignes
+
+
+def _url_saisie_papier(session, eleve=None):
+    url = reverse("qcm:saisie_papier", args=[session.code_session])
+    if eleve is not None:
+        return f"{url}?eleve={eleve.pk}"
+    return url
+
+
+def _lier_eleve_papier(request, session):
+    identifiant = (request.POST.get("identifiant") or "").strip()
+    if not identifiant:
+        messages.error(request, "Saisissez un identifiant.")
+        return None
+    etudiant = trouver_etudiant(identifiant)
+    if etudiant is None:
+        messages.error(
+            request,
+            f"Aucun élève avec l'identifiant « {identifiant} ».",
+        )
+        return None
+
+    participant = Participant.objects.filter(
+        session=session, student=etudiant
+    ).first()
+    if participant is None:
+        Participant.objects.create(
+            session=session,
+            student=etudiant,
+            couleur_assignee=services.prochaine_couleur(session),
+        )
+        messages.success(
+            request,
+            f"{etudiant.prenom} {etudiant.nom} lié à la séance.",
+        )
+    else:
+        messages.info(
+            request,
+            f"{etudiant.prenom} {etudiant.nom} était déjà lié à la séance.",
+        )
+    if session.groupe_id and etudiant.groupe_id != session.groupe_id:
+        messages.info(
+            request,
+            "Cet élève n'appartient pas au groupe de la séance.",
+        )
+    return redirect(_url_saisie_papier(session, etudiant))
+
+
+def _enregistrer_reponses_papier(request, session, questions):
+    eleve = _eleve_demande(request)
+    if eleve is None:
+        messages.error(request, "Choisissez un élève.")
+        return None
+
+    selections = {}
+    erreurs = []
+    for question in questions:
+        valeurs = [
+            valeur.strip()
+            for valeur in request.POST.getlist(f"q_{question.pk}")
+            if valeur.strip()
+        ]
+        if not valeurs:
+            continue
+        valeurs = list(dict.fromkeys(valeurs))
+        disponibles = {
+            choix.lettre for choix in question.choices.all()
+        }
+        if not set(valeurs).issubset(disponibles):
+            erreurs.append(f"{question.uid} : lettre inconnue.")
+        elif (
+            question.type == Question.TYPE_UNIQUE and len(valeurs) > 1
+        ):
+            erreurs.append(
+                f"{question.uid} : une seule lettre attendue."
+            )
+        else:
+            selections[question.pk] = valeurs
+
+    if erreurs:
+        for erreur in erreurs:
+            messages.error(request, erreur)
+        return None
+
+    with transaction.atomic():
+        participant = Participant.objects.filter(
+            session=session, student=eleve
+        ).first()
+        if participant is None:
+            participant = Participant.objects.create(
+                session=session,
+                student=eleve,
+                couleur_assignee=services.prochaine_couleur(session),
+            )
+        existantes = {
+            reponse.question_id: reponse
+            for reponse in Answer.objects.filter(
+                participant=participant
+            ).select_for_update()
+        }
+        creees = mises_a_jour = ignorees = 0
+        for question in questions:
+            reponse = existantes.get(question.pk)
+            selection = selections.get(question.pk)
+            if reponse is not None:
+                if reponse.source == Answer.SOURCE_APP:
+                    ignorees += 1
+                    continue
+                if (
+                    selection is not None
+                    and reponse.choix_selectionnes != selection
+                ):
+                    reponse.choix_selectionnes = selection
+                    reponse.save(update_fields=["choix_selectionnes"])
+                    mises_a_jour += 1
+                continue
+            if selection is None:
+                continue
+            Answer.objects.create(
+                session=session,
+                participant=participant,
+                question=question,
+                choix_selectionnes=selection,
+                source=Answer.SOURCE_PAPIER,
+                id_client=uuid.uuid4(),
+            )
+            creees += 1
+
+    messages.success(
+        request,
+        f"{creees} réponse(s) papier enregistrée(s), "
+        f"{mises_a_jour} mise(s) à jour, "
+        f"{ignorees} réponse(s) de l'application conservée(s).",
+    )
+    return redirect(_url_saisie_papier(session, eleve))
+
+
+def _importer_reponses_papier(request, session):
+    fichier = request.FILES.get("fichier")
+    if fichier is None:
+        messages.error(request, "Choisissez un fichier CSV.")
+        return None
+    if Path(fichier.name).suffix.lower() != ".csv":
+        messages.error(
+            request, "Format non reconnu : utilisez un fichier .csv."
+        )
+        return None
+    try:
+        contenu = fichier.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        messages.error(request, "Le fichier doit être encodé en UTF-8.")
+        return None
+
+    try:
+        lignes = analyser_reponses(contenu)
+        compteurs = importer_reponses(lignes, session)
+    except ErreurImportPapier as exc:
+        for message in exc.messages:
+            messages.error(request, message)
+        return None
+
+    messages.success(
+        request,
+        f"{compteurs['creees']} réponse(s) papier créée(s), "
+        f"{compteurs['mises_a_jour']} mise(s) à jour, "
+        f"{compteurs['ignorees_app']} ignorée(s) car réponse application, "
+        f"{compteurs['participants_crees']} participant(s) créé(s).",
+    )
+    return redirect(_url_saisie_papier(session, _eleve_demande(request)))
+
+
+@login_required
+def saisie_papier(request, code: str):
+    """Saisie groupée des réponses papier d'un élève, ou import CSV."""
+    session = _session_prof(request, code)
+    questions = services.questions_du_quiz(session.quiz)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "lier":
+            redirection = _lier_eleve_papier(request, session)
+        elif action == "enregistrer":
+            redirection = _enregistrer_reponses_papier(
+                request, session, questions
+            )
+        elif action == "importer":
+            redirection = _importer_reponses_papier(request, session)
+        else:
+            messages.error(request, "Action inconnue.")
+            redirection = None
+        if redirection is not None:
+            return redirection
+
+    eleve = _eleve_demande(request)
+    participant = None
+    if eleve is not None:
+        participant = Participant.objects.filter(
+            session=session, student=eleve
+        ).first()
+
+    return render(
+        request,
+        "qcm/saisie_papier.html",
+        {
+            "session": session,
+            "eleve": eleve,
+            "participant": participant,
+            "eleves": _options_eleves(session, eleve, participant),
+            "lignes": _lignes_papier(participant, questions),
+        },
     )
 
 

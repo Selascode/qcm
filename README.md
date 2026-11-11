@@ -26,7 +26,9 @@ notes) et la V3 (banque de questions, import et sélection) :
 - V2 : comptes élèves sans PIN, import CSV/JSON (interface Groupe et CLI),
   rotation des questions par blocs, mode Présentation et écran de pré-séance ;
 - V3 : banque de questions par professeur (`QuestionSet`), import JSON/CSV de
-  questions, sélection ordonnée par QCM et durée par question.
+  questions, sélection ordonnée par QCM et durée par question ; identifiant
+  INSA facultatif, note sur 20, saisie papier groupée et exports CSV des
+  résultats.
 
 ## Installation (dev / démo)
 
@@ -98,6 +100,19 @@ python manage.py import_quiz examples/quiz_demo.json --proprietaire <utilisateur
   `python manage.py import_quiz examples/quiz_demo.json --proprietaire <user>`
   reste disponible : elle crée un ensemble et un QCM qui sélectionne toutes
   les questions du fichier.
+- L'import des élèves accepte une colonne facultative `identifiant_insa`
+  (CSV) ou une clé `identifiant_insa` (JSON). Cet identifiant sert aux exports
+  de notes ; la connexion élève reste assurée par `code_etudiant`.
+- Les résultats sont accessibles depuis la colonne « Résultats » de l'admin des
+  séances et depuis le tableau, avec le total brut et la note ramenée sur 20.
+  Deux exports CSV sont téléchargeables depuis la page des résultats : notes
+  par élève (une colonne par question) et détail par question. Les deux sont en
+  UTF-8 avec BOM et séparateur virgule.
+- Pour les copies papier, `/session/<code>/saisie-papier/` permet de saisir
+  toutes les réponses d'un élève en une page, de rechercher un élève par code
+  ou identifiant INSA, et d'importer un CSV
+  `identifiant,uid_question,lettre_choisie`. Les réponses de l'application
+  priment : elles ne sont jamais remplacées.
 
 ## Accès depuis un téléphone (Wi-Fi local)
 
@@ -174,8 +189,9 @@ Les ADR correspondants sont dans `docs/decisions/`.
 
 ## Limites connues de la V1
 
-- La V2 couvre les comptes élèves, les groupes, l'import et la notation ; les
-  exports CSV/PDF et le papier restent en V3.
+- La V3 couvre la banque de questions, le papier (saisie groupée et import
+  CSV) et les exports CSV ; le PDF personnalisé par élève (WeasyPrint) reste à
+  faire.
 - KaTeX est chargé depuis un CDN sur la page tableau ; hors ligne, les
   formules s'affichent en texte brut. Le reste de l'application fonctionne.
 - Le QR code est un SVG généré à la volée, sans stockage.

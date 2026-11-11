@@ -219,6 +219,118 @@ body.page-prof {
   margin-top: 8px;
 }
 
+.form-choix-eleve,
+.form-lier-eleve {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.form-choix-eleve label,
+.form-lier-eleve label {
+  font-weight: 700;
+}
+
+.form-choix-eleve select,
+.form-lier-eleve input[type="text"] {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 2px solid var(--bord);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--texte);
+  font: inherit;
+}
+
+.form-choix-eleve select {
+  flex: 1 1 340px;
+}
+
+.form-lier-eleve {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #ece5d8;
+}
+
+.form-lier-eleve label {
+  flex-basis: 100%;
+}
+
+.form-lier-eleve input[type="text"] {
+  flex: 1 1 260px;
+}
+
+.form-papier {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.question-papier {
+  border: 1px solid #e6dfd0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+}
+
+.question-papier legend {
+  font-weight: 800;
+  padding: 0 6px;
+}
+
+.question-papier legend .identifiant {
+  margin-right: 6px;
+  color: var(--texte-doux);
+}
+
+.choix-papier {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.choix-papier-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.choix-papier-item:hover {
+  background: #fbf8f1;
+}
+
+.choix-papier-item input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.choix-papier-item .lettre {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #f2ecdf;
+  font-weight: 800;
+}
+
+.verrou-app {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: #efece4;
+  border-radius: 10px;
+  color: #4c4638;
+}
+
 .note-bas {
   color: var(--texte-doux);
   font-size: 0.85rem;

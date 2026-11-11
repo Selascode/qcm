@@ -312,6 +312,17 @@ class Student(models.Model):
         unique=True,
         blank=True,
     )
+    identifiant_insa = models.CharField(
+        "Identifiant INSA",
+        max_length=32,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text=(
+            "Identifiant fourni par l'école, utilisé pour les exports de "
+            "notes. Facultatif et distinct de l'identifiant de connexion."
+        ),
+    )
     groupe = models.ForeignKey(
         Groupe,
         on_delete=models.PROTECT,
@@ -348,6 +359,10 @@ class Student(models.Model):
             self.code_etudiant = type(self).generer_code_etudiant(
                 self.nom, self.prenom
             )
+        if self.identifiant_insa is not None:
+            # Une valeur vide doit rester NULL pour ne pas violer l'unicité
+            # entre plusieurs élèves sans identifiant INSA.
+            self.identifiant_insa = self.identifiant_insa.strip() or None
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:

@@ -46,9 +46,9 @@ def questions_du_quiz(quiz) -> list:
     """Questions sélectionnées, dans l'ordre du panier (``QuizQuestion``)."""
     return [
         ligne.question
-        for ligne in quiz.quiz_questions.select_related("question").order_by(
-            "position", "id"
-        )
+        for ligne in quiz.quiz_questions.select_related("question")
+        .prefetch_related("question__choices")
+        .order_by("position", "id")
     ]
 
 
