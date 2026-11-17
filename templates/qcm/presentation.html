@@ -6,15 +6,15 @@
 <link rel="stylesheet" href="{% static 'qcm/tableau.css' %}">
 <link
   rel="stylesheet"
-  href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+  href="{% static 'qcm/katex/katex.min.css' %}"
 >
 <script
   defer
-  src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
+  src="{% static 'qcm/katex/katex.min.js' %}"
 ></script>
 <script
   defer
-  src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  src="{% static 'qcm/katex/contrib/auto-render.min.js' %}"
 ></script>
 <script>
   document.addEventListener("DOMContentLoaded", () => {

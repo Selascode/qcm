@@ -236,8 +236,10 @@ Les ADR correspondants sont dans `docs/decisions/`.
 - La V3 couvre la banque de questions, le papier (saisie groupée et import
   CSV) et les exports CSV ; le PDF personnalisé par élève (WeasyPrint) reste à
   faire.
-- KaTeX est chargé depuis un CDN sur la page tableau ; hors ligne, les
-  formules s'affichent en texte brut. Le reste de l'application fonctionne.
+- KaTeX 0.16.11 est **servi localement** depuis `static/qcm/katex/` (licence
+  MIT) : les formules s'affichent aussi sans Internet, sans requête au CDN.
+  Le dossier `static/` doit être collecté (`collectstatic`) en production,
+  comme les autres fichiers statiques.
 - Le QR code est un SVG généré à la volée, sans stockage.
 - La file locale a été vérifiée de bout en bout : coupure du serveur, clic,
   « En attente du réseau… », redémarrage, reprise et accusé serveur ; le

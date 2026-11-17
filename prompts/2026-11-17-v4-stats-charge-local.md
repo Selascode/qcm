@@ -67,11 +67,14 @@ marges ». Le reste du plan est accepté tel quel.
   d'attente de `runserver`.
 - Documentation : `docs/MODE_LOCAL.md`, mise à jour de `GUIDE_PROF.md` et
   `README.md`, ADR 0013, JOURNAL.
+- Correctif hors connexion : KaTeX 0.16.11 (MIT) vendorisé dans
+  `static/qcm/katex/` et chargé localement par le tableau et la présentation ;
+  test `qcm/tests/test_katex.py`.
 - Captures avant/après : `docs/screenshots/v4/`.
 
 ## Vérifications
 
-- `pytest` : 267 tests passés.
+- `pytest` : 268 tests passés.
 - `ruff check .`, `python manage.py check`,
   `python manage.py makemigrations --check --dry-run` : OK.
 - `scripts/test_charge.py` contre `runserver` : 100 réussites, 0 échec,

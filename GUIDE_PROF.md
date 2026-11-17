@@ -220,7 +220,9 @@ Les fichiers d'exemple `examples/questions_demo.json` et
 `examples/questions_demo.csv` peuvent servir de modèle.
 
 > **Astuce.** Les formules mathématiques s'écrivent entre `$…$` (par exemple
-> `$1011_2$`) : elles sont mises en forme sur le tableau.
+> `$1011_2$`) : elles sont mises en forme sur le tableau. KaTeX est servi
+> localement par l'application, donc les formules restent mises en forme même
+> sur un hotspot sans Internet.
 
 ![Ensemble de questions et saisie des choix](docs/screenshots/guide/questions-ensemble.png)
 

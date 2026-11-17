@@ -39,6 +39,10 @@ saturé, filtré, ou isole les appareils entre eux.
 > garder la connexion et refuser le basculement automatique vers un autre
 > réseau.
 
+> **Formules mathématiques.** KaTeX est servi par l'application elle-même
+> (`static/qcm/katex/`) : les formules restent mises en forme même sans
+> Internet, sans requête vers un CDN.
+
 > **Attention.** Windows et macOS demandent parfois une connexion « amont »
 > active pour activer le partage de connexion. Si le portable n'a aucune
 > connexion (ni Wi-Fi, ni Ethernet), ces deux systèmes peuvent refuser de

@@ -523,7 +523,7 @@ mise en pause de fin d'étape comme point de conception à confirmer.
   `8897819`, questions en pause) et `docs/screenshots/v4/apres-presentation-stats.png`
   (branche, mêmes données, barres et ✓), même viewport 1600×900, thème sombre.
 
-**Vérifications.** `pytest` : 267 tests passés. `ruff check .`,
+**Vérifications.** `pytest` : 268 tests passés. `ruff check .`,
 `python manage.py check`, `python manage.py makemigrations --check --dry-run` :
 OK. `scripts/test_charge.py` contre `runserver` : 100 réussites, 0 échec,
 100 réponses en base. Test navigateur sur une session courte : la page de
@@ -555,3 +555,11 @@ profil avec le bon `ifname`. Une section « Après la séance » (8) couvre
 l'arrêt du serveur et du hotspot, la reconnexion au Wi-Fi habituel, le retrait
 de la règle de pare-feu (ufw, firewalld, Windows, macOS), le retour des élèves
 sur leur réseau et la conservation de `db.sqlite3`.
+
+**Correctif KaTeX hors connexion (2026-11-17).** Le test en hotspot a montré
+que KaTeX était encore chargé depuis le CDN : sans Internet, les formules
+restaient affichées en `$…$`. KaTeX 0.16.11 (licence MIT) est désormais
+vendorisé dans `static/qcm/katex/` (CSS, JS, auto-render et polices) et les
+pages tableau/présentation le chargent avec `{% static %}`. Un test
+`qcm/tests/test_katex.py` vérifie l'absence de CDN et la présence des fichiers ;
+une capture hors ligne montre les formules rendues.
