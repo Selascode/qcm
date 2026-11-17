@@ -6,11 +6,13 @@ de choix, les lettres, le temps restant et l'état de la réponse transitent.
 """
 
 import json
+import threading
 import uuid
+from contextlib import nullcontext
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -21,6 +23,18 @@ from qcm import services
 from qcm.appareil import lire_cookie_appareil, poser_cookie_appareil
 from qcm.couleurs import infos_couleur
 from qcm.models import Answer, Participant, Question, Session, Student
+
+# SQLite n'accepte qu'un écrivain à la fois. Sans sérialisation, deux
+# transactions qui lisent puis écrivent (connexions et réponses simultanées)
+# se heurtent à « database is locked » : le verrou applicatif évite ces échecs
+# en mode SQLite, sans changer le comportement des autres bases.
+_VERROU_ECRITURE_SQLITE = threading.RLock()
+
+
+def _verrou_ecriture():
+    if connection.vendor == "sqlite":
+        return _VERROU_ECRITURE_SQLITE
+    return nullcontext()
 
 
 def _json(request):
@@ -48,7 +62,11 @@ def _participant(request):
         .first()
     )
     if participant is not None:
-        services.marquer_activite(participant)
+        # Cette mise à jour est une écriture SQLite : elle doit participer au
+        # même verrou que les connexions et les réponses, sinon une connexion
+        # concurrente (lecture puis insertion) peut échouer sur le verrou.
+        with _verrou_ecriture():
+            services.marquer_activite(participant)
     return participant
 
 
@@ -165,7 +183,8 @@ def rejoindre(request):
 
     if session.groupe_id is not None:
         cookie_appareil, nouveau = lire_cookie_appareil(request)
-        reponse = _rejoindre_groupe(donnees, session, cookie_appareil)
+        with _verrou_ecriture():
+            reponse = _rejoindre_groupe(donnees, session, cookie_appareil)
         if nouveau:
             poser_cookie_appareil(reponse, cookie_appareil)
         return reponse
@@ -178,7 +197,7 @@ def rejoindre(request):
         except (TypeError, ValueError, AttributeError):
             jeton = None
 
-    with transaction.atomic():
+    with _verrou_ecriture(), transaction.atomic():
         # Même verrou que pour les séances avec groupe : la couleur est
         # attribuée en Round-Robin et conservée à la reconnexion.
         session = Session.objects.select_for_update().get(pk=session.pk)
@@ -297,7 +316,7 @@ def repondre(request):
     if len(set(choix)) != len(choix):
         return _erreur("choix_invalide")
 
-    with transaction.atomic():
+    with _verrou_ecriture(), transaction.atomic():
         session = (
             Session.objects.select_for_update()
             .select_related("quiz")
@@ -465,25 +484,30 @@ def piloter(request):
         quiz__proprietaire=request.user,
     )
     action = donnees.get("action")
-    try:
-        if action == "demarrer":
-            session = services.demarrer_session(session)
-        elif action == "pause":
-            session = services.mettre_en_pause(session)
-        elif action == "reprendre":
-            session = services.reprendre(session)
-        elif action == "plus_temps":
-            session = services.ajouter_temps(session, donnees.get("delta"))
-        elif action == "suivant":
-            session = services.etape_suivante(session)
-        elif action == "precedent":
-            session = services.etape_precedente(session)
-        elif action == "terminer":
-            session = services.terminer_session(session)
-        else:
-            return _erreur("action_inconnue")
-    except services.ErreurPilotage as exc:
-        return _erreur(str(exc), 409)
+    with _verrou_ecriture():
+        try:
+            if action == "demarrer":
+                session = services.demarrer_session(session)
+            elif action == "pause":
+                session = services.mettre_en_pause(session)
+            elif action == "pause_fin_etape":
+                session = services.mettre_en_pause_fin_etape(
+                    session, donnees.get("etape")
+                )
+            elif action == "reprendre":
+                session = services.reprendre(session)
+            elif action == "plus_temps":
+                session = services.ajouter_temps(session, donnees.get("delta"))
+            elif action == "suivant":
+                session = services.etape_suivante(session)
+            elif action == "precedent":
+                session = services.etape_precedente(session)
+            elif action == "terminer":
+                session = services.terminer_session(session)
+            else:
+                return _erreur("action_inconnue")
+        except services.ErreurPilotage as exc:
+            return _erreur(str(exc), 409)
 
     return JsonResponse(
         {

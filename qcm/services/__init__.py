@@ -20,6 +20,12 @@ from qcm.couleurs import NB_COULEURS, infos_couleur
 from qcm.models import Answer, Participant, Session
 from qcm.services.repartition import EtapeVirtuelle, generer_etapes
 
+# Délai après ``ends_at`` pendant lequel la séance reste « en cours » avant
+# l'auto-avance. Il laisse à la page de présentation le temps de mettre la
+# séance en pause pour afficher les statistiques de fin d'étape (V4) ; les
+# réponses reçues après ``ends_at`` restent refusées pendant cette marge.
+MARGE_FIN_ETAPE_S = 2
+
 
 class ErreurPilotage(ValueError):
     """Action de pilotage refusée (état de séance incompatible)."""
@@ -135,17 +141,23 @@ def _avancer(session: Session, maintenant) -> Session:
 
 
 def avancer_si_necessaire(session: Session, maintenant=None) -> Session:
-    """Avance la séance si ``now() > ends_at``. Idempotent et verrouillé."""
+    """Avance la séance après ``ends_at`` + marge de fin d'étape.
+
+    La marge ``MARGE_FIN_ETAPE_S`` laisse le temps à la présentation de
+    demander la pause et d'afficher les statistiques. Pendant cette marge, la
+    séance reste ``en_cours`` avec ``temps_restant_s == 0`` : aucune réponse
+    n'est acceptée (``repondre`` compare toujours à ``ends_at``).
+    """
     maintenant = _maintenant(maintenant)
     if session.statut != Session.STATUT_EN_COURS or session.ends_at is None:
         return session
-    if maintenant <= session.ends_at:
+    if maintenant <= session.ends_at + timedelta(seconds=MARGE_FIN_ETAPE_S):
         return session
     with transaction.atomic():
         session = _session_verrouillee(session.pk)
         if session.statut != Session.STATUT_EN_COURS or session.ends_at is None:
             return session
-        if maintenant <= session.ends_at:
+        if maintenant <= session.ends_at + timedelta(seconds=MARGE_FIN_ETAPE_S):
             return session
         return _avancer(session, maintenant)
 
@@ -188,6 +200,47 @@ def mettre_en_pause(session: Session, maintenant=None) -> Session:
         session.ends_at = None
         session.save(update_fields=["statut", "reste_en_pause", "ends_at"])
         return session
+
+
+def mettre_en_pause_fin_etape(
+    session: Session, etape_attendue, maintenant=None
+) -> Session:
+    """Met en pause la fin de l'étape, pour figer les statistiques.
+
+    Appelée par la page de présentation à l'expiration du minuteur. L'étape
+    attendue évite de mettre en pause l'étape suivante si l'auto-avance a déjà
+    eu lieu. L'action est idempotente si la séance est déjà en pause.
+
+    Le temps restant est volontairement remis à zéro : cette pause marque la
+    fin de l'étape, le professeur reprend avec « Suivant ».
+    """
+    if not isinstance(etape_attendue, int) or isinstance(etape_attendue, bool):
+        raise ErreurPilotage("Étape attendue invalide.")
+    with transaction.atomic():
+        session = _session_verrouillee(session.pk)
+        if session.statut == Session.STATUT_PAUSE:
+            return session
+        if session.statut != Session.STATUT_EN_COURS:
+            raise ErreurPilotage("La séance n'est pas en cours.")
+        if session.etape_courante != etape_attendue:
+            raise ErreurPilotage("L'étape a déjà changé.")
+        if session.ends_at is None:
+            raise ErreurPilotage("La séance n'a pas de minuteur actif.")
+        session.statut = Session.STATUT_PAUSE
+        session.reste_en_pause = 0
+        session.ends_at = None
+        session.save(update_fields=["statut", "reste_en_pause", "ends_at"])
+        return session
+
+
+def fin_etape_atteinte(session: Session, maintenant=None) -> bool:
+    """Vrai si l'étape courante est finie (pause ou minuteur écoulé)."""
+    if session.statut == Session.STATUT_PAUSE:
+        return True
+    return (
+        session.statut == Session.STATUT_EN_COURS
+        and temps_restant_s(session, maintenant) == 0
+    )
 
 
 def reprendre(session: Session, maintenant=None) -> Session:
@@ -323,6 +376,61 @@ def compter_reponses_par_question(session: Session, questions) -> dict[int, int]
         .annotate(nombre=Count("id"))
     )
     return {ligne["question_id"]: ligne["nombre"] for ligne in lignes}
+
+
+def statistiques_etape(session: Session, numero=None) -> list[dict]:
+    """Répartition des réponses par choix pour les questions d'une étape.
+
+    Le pourcentage porte sur les élèves ayant répondu à la question (une
+    question sans réponse vaut 0 %). Une réponse à choix multiple compte dans
+    chaque lettre cochée : la somme des pourcentages peut donc dépasser 100 %.
+    La fonction ne lit que des réponses déjà enregistrées et ne renvoie jamais
+    de note.
+    """
+    numero = session.etape_courante if numero is None else numero
+    questions = questions_de_l_etape(session, numero)
+    if not questions:
+        return []
+
+    reponses = Answer.objects.filter(
+        session=session, question__in=questions
+    ).values_list("question_id", "choix_selectionnes")
+    selections_par_question: dict[int, list[list[str]]] = {
+        question.pk: [] for question in questions
+    }
+    for question_id, choix in reponses:
+        selections_par_question[question_id].append(list(choix or []))
+
+    resultats = []
+    for position, question in enumerate(questions, start=1):
+        selections = selections_par_question[question.pk]
+        total = len(selections)
+        choix_statistiques = []
+        for choix in question.choices.all():
+            nombre = sum(
+                1 for reponse in selections if choix.lettre in reponse
+            )
+            pourcentage = round(100 * nombre / total, 1) if total else 0.0
+            choix_statistiques.append(
+                {
+                    "lettre": choix.lettre,
+                    "texte": choix.texte,
+                    "est_correct": choix.est_correct,
+                    "nombre": nombre,
+                    "pourcentage": pourcentage,
+                    "largeur": f"{pourcentage:.1f}",
+                    "pourcentage_affiche": f"{pourcentage:.0f}",
+                }
+            )
+        resultats.append(
+            {
+                "question": question,
+                "couleur": infos_couleur(position),
+                "nb_reponses": total,
+                "choix": choix_statistiques,
+            }
+        )
+    return resultats
 
 
 def construire_url_rejoindre(request, session: Session) -> str:

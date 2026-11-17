@@ -63,6 +63,70 @@
         <p class="sur-titre">Séance terminée</p>
         <p>Les réponses sont enregistrées.</p>
       </div>
+    {% elif fin_etape %}
+      <section
+        class="statistiques-etape"
+        aria-labelledby="titre-statistiques"
+      >
+        <div class="entete-stats">
+          <div>
+            <p class="sur-titre">Fin d'étape</p>
+            <h2 id="titre-statistiques">Répartition des réponses</h2>
+          </div>
+          <p class="note-stats">
+            Pourcentages calculés sur les élèves ayant répondu à chaque
+            question.
+          </p>
+        </div>
+        <div class="grille-stats">
+          {% for stat in statistiques %}
+            <article
+              class="stat-question"
+              style="--couleur: {{ stat.couleur.hex }}; --couleur-texte: {{ stat.couleur.couleur_texte }};"
+            >
+              <div class="question-entete">
+                <span
+                  class="pastille"
+                  style="background: {{ stat.couleur.hex }}; color: {{ stat.couleur.couleur_texte }};"
+                >{{ stat.couleur.symbole }}</span>
+                <span class="uid">{{ stat.question.uid }}</span>
+                <span class="compteur">{{ stat.nb_reponses }} rép.</span>
+              </div>
+              <p class="stat-enonce">{{ stat.question.enonce|linebreaksbr }}</p>
+              <ul class="stat-choix">
+                {% for choix in stat.choix %}
+                  <li class="stat-ligne{% if choix.est_correct %} correcte{% endif %}">
+                    <span class="stat-lettre">{{ choix.lettre }}</span>
+                    <span class="stat-libelle">
+                      <span class="stat-barre-fond" aria-hidden="true">
+                        <span
+                          class="stat-barre"
+                          style="width: {{ choix.largeur }}%;"
+                        ></span>
+                      </span>
+                      <span class="stat-texte">{{ choix.texte }}</span>
+                    </span>
+                    <span class="stat-valeur">{{ choix.pourcentage_affiche }} %</span>
+                    {% if choix.est_correct %}
+                      <span
+                        class="stat-coche"
+                        title="Bonne réponse"
+                        aria-label="Bonne réponse"
+                      >✓</span>
+                    {% else %}
+                      <span class="stat-coche" aria-hidden="true"></span>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </article>
+          {% empty %}
+            <p class="aucune-question">
+              Aucune réponse à afficher pour cette étape.
+            </p>
+          {% endfor %}
+        </div>
+      </section>
     {% else %}
       <div class="grille-questions">
         {% for carte in cartes %}
@@ -118,7 +182,9 @@
     code: "{{ session.code_session|escapejs }}",
     statut: "{{ session.statut|escapejs }}",
     etape: {{ session.etape_courante }},
-    temps: {% if temps_restant_s is not None %}{{ temps_restant_s }}{% else %}null{% endif %}
+    temps: {% if temps_restant_s is not None %}{{ temps_restant_s }}{% else %}null{% endif %},
+    csrf: "{{ csrf_token }}",
+    presentation: true
   };
 </script>
 <script src="{% static 'qcm/tableau.js' %}"></script>

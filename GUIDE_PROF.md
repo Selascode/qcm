@@ -1,13 +1,14 @@
 # Guide du professeur — QCM en direct
 
-**Version du guide :** 1.0 — novembre 2026 (application V3)
+**Version du guide :** 1.1 — novembre 2026 (application V4)
 **Public :** professeur de l'INSA Rouen, sans compétence technique particulière.
 **En cas de problème :** voir la FAQ (§7) puis la section technique (§8).
 
-> **Les captures d'écran.** Les liens vers `docs/screenshots/v3-fin/...`
-> pointent vers des captures réelles de l'application. Les liens vers
-> `docs/screenshots/guide/...` sont des emplacements à compléter par des
-> captures sur le poste de l'INSA ; le dossier n'existe pas encore.
+> **Les captures d'écran.** Les liens vers `docs/screenshots/v3-fin/...` et
+> `docs/screenshots/v4/...` pointent vers des captures réelles de
+> l'application. Les liens vers `docs/screenshots/guide/...` sont des
+> emplacements à compléter par des captures sur le poste de l'INSA ; le
+> dossier n'existe pas encore.
 
 ## Sommaire
 
@@ -123,6 +124,12 @@ tableau pendant l'attente.
 > Wi-Fi**, et ce réseau ne doit pas isoler les appareils (certains réseaux
 > « invités » le font). Le pare-feu de l'ordinateur doit autoriser les
 > connexions entrantes sur le port 8000.
+
+> **Réseau de l'école saturé ou filtré ?** Le portable peut créer son propre
+> hotspot Wi-Fi et faire tourner l'application dessus, sans dépendre du
+> Wi-Fi de l'établissement. La procédure complète (Windows, macOS, Linux,
+> `QCM_LAN_HOST`, distribution des adresses) est dans
+> [`docs/MODE_LOCAL.md`](docs/MODE_LOCAL.md).
 
 ![Page initiale d'une séance avec le QR code](docs/screenshots/guide/session-initiale.png)
 
@@ -308,9 +315,12 @@ Les boutons disponibles :
 | **Précédent / Suivant** | Change d'étape manuellement. |
 | **Terminer la séance** | Clôture la séance et enregistre les résultats. |
 
-Le chronomètre fait avancer la séance automatiquement : à la fin du temps,
-l'étape suivante s'affiche. Après la dernière étape, la séance se termine
-automatiquement.
+Sans le Mode Présentation, le chronomètre fait avancer la séance
+automatiquement : à la fin du temps, l'étape suivante s'affiche. En **Mode
+Présentation**, la fin du temps met d'abord la séance en pause pour afficher
+les statistiques (voir §4.4) : cliquer sur **Suivant** pour continuer. Après
+la dernière étape, la séance se termine automatiquement sans Présentation ;
+en Présentation, cliquer sur **Terminer la séance** après les statistiques.
 
 ![Tableau de bord pendant une séance](docs/screenshots/v3-fin/apres/tableau.png)
 
@@ -341,7 +351,22 @@ Le bouton **Mode Présentation** ouvre une vue plein écran, sans boutons de
 contrôle, à projeter sur le vidéoprojecteur. Garder l'écran **Tableau** sur
 l'ordinateur pour piloter (pause, temps, étape suivante).
 
-![Mode Présentation](docs/screenshots/guide/presentation.png)
+À la fin du temps de l'étape — ou dès que vous cliquez sur **Pause** — la vue
+de présentation remplace les questions par les **statistiques de la classe** :
+
+- un graphique en barres par question, avec le pourcentage d'élèves ayant
+  choisi chaque proposition ;
+- la **bonne réponse** est entourée en vert et marquée d'un ✓ ;
+- les pourcentages portent sur les élèves ayant répondu à la question. Une
+  question à choix multiple peut donc afficher un total supérieur à 100 %.
+
+La séance est alors **en pause** : cliquez sur **Suivant** sur l'écran
+Tableau pour passer à l'étape suivante (ou sur **Terminer la séance** après la
+dernière étape). La page de présentation se remet à jour automatiquement.
+Les statistiques ne sont visibles que sur cette vue professeur : les
+téléphones ne reçoivent jamais la correction ni la répartition.
+
+![Statistiques de fin d'étape en mode Présentation](docs/screenshots/v4/apres-presentation-stats.png)
 
 ---
 
@@ -487,10 +512,22 @@ Vérifier dans cet ordre :
    `127.0.0.1` ;
 4. le QR code et l'URL ont été générés avec `QCM_LAN_HOST` (voir §2.3) ;
 5. le pare-feu de l'ordinateur autorise les connexions sur le port 8000 ;
-6. le téléphone n'est pas sur un VPN ou un partage de connexion.
+6. le téléphone n'est pas sur un VPN ou un partage de connexion ;
+7. si le Wi-Fi de l'école est saturé, filtré ou isole les appareils, passer
+   par un **hotspot local** (voir la question suivante et
+   [`docs/MODE_LOCAL.md`](docs/MODE_LOCAL.md)).
 
 Tester directement `http://<adresse>:8000/rejoindre/` dans le navigateur du
 téléphone.
+
+### « Le Wi-Fi de l'école est saturé, filtré ou isole les téléphones »
+
+Ne pas dépendre du réseau de l'établissement : le portable peut créer son
+propre hotspot Wi-Fi et servir l'application dessus. Le guide
+[`docs/MODE_LOCAL.md`](docs/MODE_LOCAL.md) détaille la création du hotspot
+sous Windows, macOS et Linux, le lancement avec `QCM_LAN_HOST`, la
+distribution du QR code et les réglages de pare-feu. C'est la solution à
+préparer avant une séance dans une salle où le Wi-Fi est incertain.
 
 ### « Le QR code ne fonctionne pas »
 
@@ -561,8 +598,10 @@ guide n'en a pas besoin.
 | `qcm/tests/` | Tests automatiques. |
 | `templates/` | Pages HTML. |
 | `static/` | Styles, scripts et polices. |
+| `scripts/` | Scripts de démonstration, dont le test de charge à 100 clients. |
 | `examples/` | Fichiers CSV/JSON de démonstration. |
-| `docs/` | Spécification, architecture, décisions et captures. |
+| `docs/` | Spécification, architecture, décisions, captures et mode local. |
+| `docs/MODE_LOCAL.md` | Hotspot Wi-Fi et lancement sur réseau local isolé. |
 | `GUIDE_PROF.md` | Le présent guide. |
 | `db.sqlite3` | Base de données par défaut (créée au premier `migrate`). |
 | `media/` | Images de questions, si utilisées. |
@@ -626,8 +665,30 @@ python manage.py makemigrations --check --dry-run
 ```
 
 Les tests couvrent notamment l'import, la notation, le refus tardif, le
-doublon de réponse et l'absence d'énoncé dans les réponses destinées aux
-téléphones.
+doublon de réponse, les statistiques de fin d'étape et l'absence d'énoncé
+dans les réponses destinées aux téléphones. Le test
+`qcm/tests/test_charge.py` lance 100 clients simultanés via `live_server` et
+vérifie qu'aucune réponse n'est perdue.
+
+**Test de charge manuel.** Avec le serveur lancé dans un premier terminal :
+
+```bash
+python manage.py runserver 0.0.0.0:8000
+```
+
+puis, dans un second terminal :
+
+```bash
+python scripts/test_charge.py --url http://127.0.0.1:8000
+```
+
+Le script crée un QCM de charge, un groupe de 100 élèves et une session, puis
+affiche le nombre de réussites/échecs et les temps moyens de connexion et de
+réponse. Il contrôle en base que les 100 `Answer` sont présentes. Les
+connexions sont étalées de 20 ms par client pour ne pas saturer la file
+d'attente du serveur de développement ; pour une vraie salle de 100
+téléphones, un serveur WSGI de production est plus robuste (voir
+`docs/MODE_LOCAL.md`).
 
 ### 8.4. Sécurité et principes
 
