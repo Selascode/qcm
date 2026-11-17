@@ -305,7 +305,120 @@ et l'URL affichée sous le QR code pointent alors vers
 
 ---
 
-## 8. Aide-mémoire
+## 8. Après la séance : déconnecter et remettre en état
+
+À la fin de la séance, remettre le portable dans son état habituel. Ces
+opérations ne suppriment aucune réponse : la base `db.sqlite3` reste dans le
+dossier du projet.
+
+### 8.1. Arrêter l'application
+
+Dans le terminal du serveur, faire `Ctrl+C`. Vérifier qu'il ne reste pas de
+processus :
+
+```bash
+ps aux | grep "manage.py runserver"
+```
+
+Fermer le terminal. Si un processus persiste : `pkill -f "manage.py runserver"`
+(à ne faire qu'après avoir vérifié qu'il s'agit bien de ce serveur).
+
+### 8.2. Arrêter le hotspot
+
+- **Windows** : Paramètres → Réseau et Internet → Partage de connexion mobile
+  → désactiver. Si l'ancienne commande `netsh` a été utilisée :
+  `netsh wlan stop hostednetwork` (invite administrateur).
+- **macOS** : Réglages Système → Général → Partage → décocher **Partage
+  Internet**.
+- **Linux** : repérer le profil actif puis le désactiver :
+
+  ```bash
+  nmcli -f NAME,DEVICE connection show --active
+  nmcli connection down qcm-hotspot   # ou le nom affiché
+  ```
+
+  Si le profil `qcm-hotspot` a été créé uniquement pour le test, le supprimer :
+
+  ```bash
+  nmcli connection delete qcm-hotspot
+  ```
+
+  Ne pas supprimer un profil Wi-Fi existant qui sert habituellement au
+  portable. La commande directe `nmcli device wifi hotspot` peut avoir créé
+  un profil nommé `Hotspot` : utiliser le nom affiché par `connection show
+  --active`.
+
+### 8.3. Reconnecter le Wi-Fi habituel
+
+- **Windows / macOS** : rouvrir le menu Wi-Fi et se reconnecter au réseau
+  habituel (école, maison, etc.).
+- **Linux** :
+
+  ```bash
+  nmcli device wifi list
+  nmcli device wifi connect "<SSID>" password "<mot-de-passe>"
+  # ou, si le profil existe déjà :
+  nmcli connection up "<nom-du-profil>"
+  nmcli -f NAME,DEVICE connection show --active
+  ```
+
+  Le portable était peut-être connecté en Wi-Fi avant de passer en mode
+  point d'accès : il faut le reconnecter explicitement.
+
+### 8.4. Remettre le pare-feu
+
+La règle ouverte pour la démonstration peut être retirée si elle n'est plus
+utile. Le serveur n'écoute plus après l'arrêt, mais la règle resterait
+ouverte pour les prochaines fois.
+
+- **Ubuntu / ufw** :
+
+  ```bash
+  sudo ufw status
+  sudo ufw delete allow 8000/tcp
+  sudo ufw reload
+  sudo ufw status
+  ```
+
+  Si `ufw delete allow 8000/tcp` ne trouve pas la règle, afficher les règles
+  numérotées (`sudo ufw status numbered`) et supprimer le bon numéro
+  (`sudo ufw delete <numéro>`).
+
+- **firewalld** :
+
+  ```bash
+  sudo firewall-cmd --remove-port=8000/tcp --permanent
+  sudo firewall-cmd --reload
+  sudo firewall-cmd --list-ports
+  ```
+
+- **Windows** (PowerShell administrateur) :
+
+  ```powershell
+  Get-NetFirewallRule -DisplayName "QCM 8000"
+  Remove-NetFirewallRule -DisplayName "QCM 8000"
+  ```
+
+  Si Python a été autorisé interactivement lors du premier lancement, le
+  retirer dans **Sécurité Windows → Pare-feu et protection du réseau →
+  Autoriser une application via le pare-feu**. Laisser la règle si
+  l'application doit resservir.
+
+- **macOS** : Réglages Système → Réseau → Pare-feu → Options ; retirer Python
+  de la liste des applications autorisées, ou réactiver le pare-feu s'il a
+  été désactivé pour la séance.
+
+### 8.5. Côté élèves et données
+
+- Demander aux élèves de **revenir sur leur Wi-Fi habituel** et, si
+  nécessaire, d'oublier le réseau `QCM-INSA`.
+- Les réponses et les notes restent en base ; sauvegarder `db.sqlite3` si
+  nécessaire, puis fermer le portable.
+- Réactiver la mise en veille si elle avait été désactivée pour la séance.
+
+---
+
+## 9. Aide-mémoire
 
 ```text
 1. Créer le hotspot (Paramètres Windows / Partage macOS / nmcli Linux).
@@ -315,5 +428,7 @@ et l'URL affichée sous le QR code pointent alors vers
 3. QCM_LAN_HOST=<adresse>:8000 python manage.py runserver 0.0.0.0:8000
 4. Ouvrir la page initiale de la séance et projeter le QR code.
 5. Tester avec un téléphone, puis distribuer.
-6. Après la séance : arrêter le serveur et le partage.
+6. Après la séance : Ctrl+C sur le serveur, arrêter le hotspot, retirer la
+   règle de pare-feu si elle n'est plus utile, reconnecter le Wi-Fi habituel
+   et demander aux élèves de revenir sur leur réseau.
 ```

@@ -551,4 +551,7 @@ la commande a créé un profil `qcm-hotspot` inutilisable, puis `nmcli
 connection up` a échoué sur « mismatching interface name ». `docs/MODE_LOCAL.md`
 demande désormais de relever l'interface Wi-Fi (`nmcli device status` / `iw
 dev`), donne `wlo1` en exemple et documente la suppression/recréation du
-profil avec le bon `ifname`.
+profil avec le bon `ifname`. Une section « Après la séance » (8) couvre
+l'arrêt du serveur et du hotspot, la reconnexion au Wi-Fi habituel, le retrait
+de la règle de pare-feu (ufw, firewalld, Windows, macOS), le retour des élèves
+sur leur réseau et la conservation de `db.sqlite3`.
