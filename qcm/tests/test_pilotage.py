@@ -1,9 +1,11 @@
 """Pilotage professeur : actions, authentification et CSRF."""
 
 import json
+from datetime import timedelta
 
 import pytest
 from django.test import Client
+from django.utils import timezone
 
 from qcm.import_questions import importer_quiz
 from qcm.models import Participant, Session
@@ -293,3 +295,27 @@ def test_code_inconnu(client, proprietaire):
     assert client.get("/tableau/ZZZZZZ/").status_code == 404
     assert client.get("/rejoindre/ZZZZZZ/").status_code == 404
     assert client.get("/eleve/ZZZZZZ/").status_code == 404
+
+
+def test_pause_fin_etape_via_api(client, proprietaire):
+    session = demarrer(preparer(proprietaire))
+    client.force_login(proprietaire)
+    Session.objects.filter(pk=session.pk).update(
+        ends_at=timezone.now() - timedelta(seconds=1)
+    )
+    session.refresh_from_db()
+
+    refus = piloter(client, session, "pause_fin_etape", etape=2)
+    assert refus.status_code == 409
+
+    reponse = piloter(client, session, "pause_fin_etape", etape=1)
+    assert reponse.status_code == 200
+    assert reponse.json()["statut"] == "pause"
+    assert reponse.json()["temps_restant_s"] == 0
+    session.refresh_from_db()
+    assert session.statut == Session.STATUT_PAUSE
+
+    # Un second onglet de présentation ne change rien.
+    encore = piloter(client, session, "pause_fin_etape", etape=1)
+    assert encore.status_code == 200
+    assert encore.json()["statut"] == "pause"

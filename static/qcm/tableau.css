@@ -354,3 +354,154 @@ body.page-tableau {
   background: #222a35;
   color: #fff;
 }
+
+/* Statistiques de fin d'étape (mode présentation, V4). */
+
+.statistiques-etape {
+  display: grid;
+  gap: 14px;
+}
+
+.entete-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
+
+.entete-stats h2 {
+  margin: 0;
+  font-size: clamp(1.3rem, 2vw, 1.9rem);
+}
+
+.note-stats {
+  margin: 0;
+  color: #8fa0b5;
+  font-size: 0.85rem;
+  max-width: 34ch;
+}
+
+.grille-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  align-content: start;
+}
+
+.stat-question {
+  background: #151a21;
+  border: 1px solid #29313c;
+  border-top: 10px solid var(--couleur);
+  border-radius: 16px;
+  padding: 16px 18px 18px;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.22);
+}
+
+.stat-enonce {
+  color: #f4f7fb;
+  font-size: clamp(1.05rem, 1.5vw, 1.45rem);
+  font-weight: 750;
+  line-height: 1.25;
+  margin: 0 0 14px;
+}
+
+.stat-choix {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.stat-ligne {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 52px 22px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+}
+
+.stat-ligne.correcte {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, 0.09);
+}
+
+.stat-lettre {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--couleur);
+  color: var(--couleur-texte);
+  font-weight: 900;
+  font-size: 1.05rem;
+}
+
+.stat-libelle {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.stat-barre-fond {
+  display: block;
+  height: 14px;
+  background: #232c37;
+  border: 1px solid #29313c;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.stat-barre {
+  display: block;
+  height: 100%;
+  background: var(--couleur);
+  border-radius: 999px;
+}
+
+.stat-ligne.correcte .stat-barre {
+  background: #4ade80;
+}
+
+.stat-texte {
+  color: #c7d2df;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.stat-valeur {
+  color: #ffd166;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.stat-coche {
+  color: #4ade80;
+  font-weight: 900;
+  font-size: 1.25rem;
+  line-height: 1;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .grille-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-ligne {
+    grid-template-columns: 30px minmax(0, 1fr) 46px 20px;
+    gap: 7px;
+  }
+
+  .stat-lettre {
+    width: 30px;
+    height: 30px;
+    font-size: 0.95rem;
+  }
+}

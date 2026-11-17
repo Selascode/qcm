@@ -93,10 +93,12 @@ def repondre(client, jeton, question_uid: str, choix, id_client=None):
     )
 
 
-def piloter(client, session: Session, action: str, delta=None):
+def piloter(client, session: Session, action: str, delta=None, etape=None):
     corps = {"code": session.code_session, "action": action}
     if delta is not None:
         corps["delta"] = delta
+    if etape is not None:
+        corps["etape"] = etape
     return client.post(
         "/api/piloter/",
         data=json.dumps(corps),
@@ -105,9 +107,14 @@ def piloter(client, session: Session, action: str, delta=None):
 
 
 def expirer_etape(session: Session) -> None:
-    """Place ``ends_at`` dans le passé pour déclencher l'auto-avance."""
+    """Place ``ends_at`` au-delà de la marge de fin d'étape.
+
+    La séance reste ``en_cours`` pendant ``MARGE_FIN_ETAPE_S`` secondes après
+    ``ends_at`` (statistiques de présentation) ; on se place donc à 3 s pour
+    déclencher l'auto-avance dans les tests.
+    """
     Session.objects.filter(pk=session.pk).update(
-        ends_at=timezone.now() - timedelta(seconds=1)
+        ends_at=timezone.now() - timedelta(seconds=3)
     )
     session.refresh_from_db()
 
