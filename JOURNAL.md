@@ -544,3 +544,11 @@ sont pas modifiés (mise à jour humaine attendue). Revue humaine et fusion
 manuelle attendues (aucun auto-merge). Le verrou SQLite et l'étalement des
 connexions sont des limites du serveur de développement local ; une salle
 réelle de 100 téléphones gagnera à utiliser un serveur WSGI de production.
+
+**Correctif post-test (2026-11-17).** Le premier test du hotspot Linux a
+utilisé `wlan0`, qui n'existe pas sur le portable testé (interface `wlo1`) :
+la commande a créé un profil `qcm-hotspot` inutilisable, puis `nmcli
+connection up` a échoué sur « mismatching interface name ». `docs/MODE_LOCAL.md`
+demande désormais de relever l'interface Wi-Fi (`nmcli device status` / `iw
+dev`), donne `wlo1` en exemple et documente la suppression/recréation du
+profil avec le bon `ifname`.

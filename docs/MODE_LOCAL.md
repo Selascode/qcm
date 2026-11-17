@@ -102,49 +102,78 @@ l'**adresse IPv4 du portable sur le hotspot** : elle servira pour
 
 ### 2.3. Linux (NetworkManager)
 
-La méthode la plus simple, si la carte supporte le mode AP :
+**Le nom de l'interface Wi-Fi n'est pas toujours `wlan0`.** Sur les portables
+récents, c'est souvent `wlo1`, `wlp2s0`, `wlp3s0`, etc. Ne pas recopier
+`wlan0` au hasard : le premier travail est de relever le vrai nom.
 
-```bash
-nmcli device wifi hotspot ifname wlan0 \
-  ssid QCM-INSA password "motdepasse123"
-```
+1. Trouver l'interface Wi-Fi :
 
-NetworkManager active alors un partage IPv4 et attribue généralement
-l'adresse `10.42.0.1` au portable. Vérifier avec :
+   ```bash
+   nmcli -f DEVICE,TYPE,STATE device status
+   # ou
+   iw dev
+   ```
 
-```bash
-ip -4 addr show wlan0
-```
+   Prendre la ligne de type `wifi` qui n'est pas `p2p-dev-...` (par exemple
+   `wlo1`) et la garder dans une variable :
 
-Si la commande directe échoue, créer la connexion explicitement :
+   ```bash
+   INTERFACE_WIFI=wlo1   # remplacer par le nom relevé
+   ```
 
-```bash
-nmcli connection add type wifi ifname wlan0 con-name qcm-hotspot \
-  autoconnect no ssid QCM-INSA \
-  802-11-wireless.mode ap 802-11-wireless.band bg \
-  ipv4.method shared
-nmcli connection modify qcm-hotspot \
-  wifi-sec.key-mgmt wpa-psk wifi-sec.psk "motdepasse123"
-nmcli connection up qcm-hotspot
-```
+2. Vérifier que la carte accepte le mode AP :
 
-Ouvrir le pare-feu :
+   ```bash
+   iw list | grep -A 5 "Supported interface modes"
+   ```
 
-```bash
-sudo ufw allow 8000/tcp
-# ou, avec firewalld :
-sudo firewall-cmd --add-port=8000/tcp --permanent
-sudo firewall-cmd --reload
-```
+   La liste doit contenir `AP`. Si ce n'est pas le cas, utiliser un routeur
+   portable ou une clé Wi-Fi compatible.
 
-Vérifier que la carte accepte le mode AP :
+3. Créer le hotspot avec le bon nom d'interface :
 
-```bash
-iw list | grep -A 5 "Supported interface modes"
-```
+   ```bash
+   nmcli device wifi hotspot ifname "$INTERFACE_WIFI" \
+     ssid QCM-INSA password "motdepasse123"
+   ```
 
-La liste doit contenir `AP`. Si ce n'est pas le cas, utiliser un routeur
-portable ou une clé Wi-Fi compatible.
+   NetworkManager active alors un partage IPv4 et attribue généralement
+   l'adresse `10.42.0.1` au portable. Vérifier avec :
+
+   ```bash
+   ip -4 addr show "$INTERFACE_WIFI"
+   ```
+
+4. Si la commande directe échoue, créer la connexion explicitement. Avant
+   cela, supprimer un éventuel ancien profil créé avec un mauvais nom
+   d'interface (`wlan0`, par exemple) :
+
+   ```bash
+   nmcli connection delete qcm-hotspot 2>/dev/null
+   nmcli connection add type wifi ifname "$INTERFACE_WIFI" \
+     con-name qcm-hotspot autoconnect no ssid QCM-INSA \
+     802-11-wireless.mode ap 802-11-wireless.band bg \
+     ipv4.method shared
+   nmcli connection modify qcm-hotspot \
+     wifi-sec.key-mgmt wpa-psk wifi-sec.psk "motdepasse123"
+   nmcli connection up qcm-hotspot
+   ```
+
+   L'erreur `No suitable device found ... mismatching interface name`
+   signifie que le profil a été créé avec un autre `ifname` que celui de la
+   carte : le supprimer et le recréer avec `$INTERFACE_WIFI`.
+
+5. Ouvrir le pare-feu (une seule des deux commandes suffit selon le système) :
+
+   ```bash
+   sudo ufw allow 8000/tcp
+   # ou, si firewalld est installé :
+   sudo firewall-cmd --add-port=8000/tcp --permanent
+   sudo firewall-cmd --reload
+   ```
+
+   Si `firewall-cmd` n'existe pas, c'est que firewalld n'est pas installé :
+   la règle `ufw` suffit.
 
 > **Sans Internet, le partage fonctionne quand même** avec
 > `ipv4.method shared` : NetworkManager crée un réseau local et un serveur
@@ -249,6 +278,9 @@ et l'URL affichée sous le QR code pointent alors vers
 | Symptôme | Piste à vérifier |
 | :--- | :--- |
 | Le téléphone ne voit pas le réseau | Le hotspot est actif ; le portable est à portée ; la carte Wi-Fi supporte le mode AP ; le canal est autorisé dans le pays. |
+| `Device "wlan0" does not exist` ou « n'est pas un périphérique Wi-Fi » | Le nom `wlan0` n'est qu'un exemple : relever le vrai nom avec `nmcli -f DEVICE,TYPE,STATE device status` (souvent `wlo1` ou `wlp2s0`) et le passer à `ifname`. |
+| `No suitable device found ... mismatching interface name` | Le profil `qcm-hotspot` a été créé avec un mauvais `ifname` : `nmcli connection delete qcm-hotspot`, puis le recréer avec l'interface relevée. |
+| `firewall-cmd: command not found` | firewalld n'est pas installé ; la règle `sudo ufw allow 8000/tcp` suffit sur Ubuntu. |
 | Le téléphone se connecte mais la page ne s'ouvre pas | L'URL utilise bien l'adresse du hotspot (pas `127.0.0.1`) ; le serveur écoute sur `0.0.0.0:8000` ; le pare-feu autorise le port 8000. |
 | `QCM_LAN_HOST` ne change rien | Le serveur a été relancé après la modification ; la page de la séance a été rouverte pour régénérer le QR code. |
 | Le QR code contient `127.0.0.1` | `QCM_LAN_HOST` n'était pas défini au lancement ; le définir puis relancer. |
@@ -277,6 +309,8 @@ et l'URL affichée sous le QR code pointent alors vers
 
 ```text
 1. Créer le hotspot (Paramètres Windows / Partage macOS / nmcli Linux).
+   Linux : relever d'abord l'interface avec `nmcli device status` (wlo1,
+   wlp2s0…), puis `nmcli device wifi hotspot ifname <interface> ...`.
 2. Relever l'adresse IPv4 du portable sur le hotspot.
 3. QCM_LAN_HOST=<adresse>:8000 python manage.py runserver 0.0.0.0:8000
 4. Ouvrir la page initiale de la séance et projeter le QR code.
