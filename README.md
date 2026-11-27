@@ -5,14 +5,15 @@ tableau. Les élèves répondent depuis leur téléphone **sans jamais voir
 l'énoncé** ; le serveur est la seule référence temporelle.
 
 Ce dépôt couvre la V1 (ticket #1 et dette #3), la V2 (comptes, groupes,
-notes) et la V3 (banque de questions, import et sélection) :
+notes), la V3 (banque de questions, import et sélection) et la V4
+(statistiques de fin d'étape, mode serveur local et test de charge) :
 
 - import JSON d'un QCM (format `docs/SPEC.md`) et saisie via l'admin ;
 - code de session + QR code, salon d'attente ;
 - 1 à 4 questions par étape, une couleur et un symbole par question ;
 - couleur, symbole et graine de mélange persistés par élève ;
-- passage automatique à l'étape suivante à `ends_at`, pause / reprise /
-  +temps / suivant / précédent ;
+- passage automatique à l'étape suivante à `ends_at` (hors Mode
+  Présentation), pause / reprise / +temps / suivant / précédent ;
 - polling `/api/etat/` toutes les 1 à 2 s, file locale `localStorage` et
   anti-doublon `id_client` ;
 - tableau professeur protégé, questions en pleine largeur, compteurs de
@@ -28,7 +29,12 @@ notes) et la V3 (banque de questions, import et sélection) :
 - V3 : banque de questions par professeur (`QuestionSet`), import JSON/CSV de
   questions, sélection ordonnée par QCM et durée par question ; identifiant
   INSA facultatif, note sur 20, saisie papier groupée et exports CSV des
-  résultats.
+  résultats ;
+- V4 : statistiques de fin d'étape en mode Présentation (barres CSS et bonne
+  réponse marquée), pause automatique de fin d'étape pour les afficher, test
+  de charge à 100 clients (`scripts/test_charge.py`) et guide
+  [`docs/MODE_LOCAL.md`](docs/MODE_LOCAL.md) pour un hotspot Wi-Fi de
+  secours.
 
 ## Installation (dev / démo)
 
@@ -114,6 +120,27 @@ python manage.py import_quiz examples/quiz_demo.json --proprietaire <utilisateur
   `identifiant,uid_question,lettre_choisie`. Les réponses de l'application
   priment : elles ne sont jamais remplacées.
 
+## V4 — statistiques, charge et mode local
+
+- En **Mode Présentation**, la fin du minuteur (ou un clic sur **Pause**)
+  remplace les questions par les statistiques de l'étape : barres CSS par
+  proposition, pourcentages sur les élèves ayant répondu et bonne réponse
+  entourée en vert avec un ✓. La page déclenche elle-même une pause de fin
+  d'étape pour figer l'affichage ; le professeur avance avec **Suivant**.
+  Sans Mode Présentation, l'auto-avance reste le comportement par défaut.
+- `scripts/test_charge.py` simule 100 élèves qui rejoignent une session et
+  répondent en parallèle, mesure les temps de connexion/réponse, compte les
+  succès et échecs, et vérifie dans la base que toutes les `Answer` sont
+  présentes. Le test `qcm/tests/test_charge.py` rejoue le scénario via
+  `live_server`.
+- Un verrou applicatif sérialise les écritures SQLite (connexions, réponses,
+  activité) : sans lui, 100 transactions simultanées « lisent puis écrivent »
+  et échouent sur `database is locked`. Il est ignoré sous PostgreSQL.
+- [`docs/MODE_LOCAL.md`](docs/MODE_LOCAL.md) explique comment créer un
+  hotspot Wi-Fi sur le portable (Windows, macOS, Linux), lancer
+  l'application avec `QCM_LAN_HOST` et distribuer l'adresse/le QR code aux
+  élèves, sans dépendre du Wi-Fi de l'école.
+
 ## Accès depuis un téléphone (Wi-Fi local)
 
 1. Connecter le serveur et le téléphone au **même réseau Wi-Fi** (éviter un
@@ -152,12 +179,29 @@ réseau local et n'utilise pas HTTPS.
 Pour un accès depuis les téléphones du réseau local, lancer
 `python manage.py runserver 0.0.0.0:8000` et ouvrir l'URL IP du serveur.
 
+Si le Wi-Fi de l'école est saturé, filtré ou isole les appareils, suivre
+[`docs/MODE_LOCAL.md`](docs/MODE_LOCAL.md) : le portable crée son propre
+hotspot et sert l'application dessus.
+
 ## Tests et qualité
 
 ```bash
 pytest
 ruff check .
 ```
+
+Le test de charge se lance contre un serveur déjà démarré :
+
+```bash
+# terminal 1
+python manage.py runserver 0.0.0.0:8000
+# terminal 2
+python scripts/test_charge.py --url http://127.0.0.1:8000
+```
+
+Il crée son propre QCM, son groupe de 100 élèves et sa session, puis vérifie
+que les 100 réponses sont en base. Le script étale les connexions de 20 ms
+par client pour respecter la file d'attente du serveur de développement.
 
 Le test `qcm/tests/test_parcours_v1.py` exécute le critère de fin V1 : cinq
 étapes, quatre élèves, un redémarrage simulé par fermeture/réouverture des
@@ -192,8 +236,10 @@ Les ADR correspondants sont dans `docs/decisions/`.
 - La V3 couvre la banque de questions, le papier (saisie groupée et import
   CSV) et les exports CSV ; le PDF personnalisé par élève (WeasyPrint) reste à
   faire.
-- KaTeX est chargé depuis un CDN sur la page tableau ; hors ligne, les
-  formules s'affichent en texte brut. Le reste de l'application fonctionne.
+- KaTeX 0.16.11 est **servi localement** depuis `static/qcm/katex/` (licence
+  MIT) : les formules s'affichent aussi sans Internet, sans requête au CDN.
+  Le dossier `static/` doit être collecté (`collectstatic`) en production,
+  comme les autres fichiers statiques.
 - Le QR code est un SVG généré à la volée, sans stockage.
 - La file locale a été vérifiée de bout en bout : coupure du serveur, clic,
   « En attente du réseau… », redémarrage, reprise et accusé serveur ; le

@@ -480,3 +480,86 @@ cellule. L'identifiant INSA n'est pas utilisé pour la connexion élève.
 hors de ce ticket. La suppression d'une réponse papier existante n'est pas
 exposée dans la vue groupée (on peut la modifier). Revue humaine et fusion
 manuelle attendues (aucun auto-merge).
+
+
+## 2026-11-17 — V4 : statistiques de fin d'étape, charge 100 clients et mode local
+
+**Objectif.** Terminer la V4 de l'issue #11 : statistiques de classe dans le
+Mode Présentation, test de charge à 100 clients, guide de hotspot Wi-Fi local
+et mise à jour du guide professeur.
+
+**Prompt / demande.** Issue #11 ; plan de 6 points publié le 2026-11-17
+(commentaire `6945443732`) ; validation humaine le même jour (commentaire
+`6945518734`) : « je valide les 2 secondes de marges ». Le plan signalait la
+mise en pause de fin d'étape comme point de conception à confirmer.
+
+**Réalisé.**
+
+- `qcm/services/__init__.py` : `statistiques_etape()` (comptage par lettre,
+  pourcentages sur les répondants, choix corrects), `fin_etape_atteinte()`,
+  `mettre_en_pause_fin_etape()` et `MARGE_FIN_ETAPE_S = 2`. La marge est
+  appliquée par `avancer_si_necessaire()` ; les réponses après `ends_at`
+  restent refusées.
+- Vue `/tableau/<code>/presentation/` : remplacement des questions par les
+  statistiques en pause ou à `ends_at`. Barres CSS, textes des choix,
+  pourcentage, bordure verte et ✓ sur la bonne réponse ; note sur le
+  dénominateur. La page programme la pause de fin d'étape à partir de
+  `ends_at` et appelle l'action `pause_fin_etape` (étape attendue,
+  idempotente).
+- Tests : `test_statistiques.py` (service, HTML des barres, absence de stats
+  pendant l'étape, stats à `ends_at`, séance terminée, accès protégé),
+  `test_timer.py` (marge, pause de fin d'étape, validation de l'étape) et
+  `test_pilotage.py` (action API).
+- Charge : `scripts/test_charge.py` (bibliothèque standard, 100 clients,
+  scénario autonome ou session existante, mesures connexion/réponse,
+  vérification ORM) ; `qcm/tests/test_charge.py` via `live_server` (100
+  réponses en base, zéro échec). Verrou `RLock` sur les écritures SQLite
+  (connexions, réponses, activité) et étalement des connexions de 20 ms pour
+  la file d'attente de `runserver`.
+- Documentation : `docs/MODE_LOCAL.md` (hotspot Windows/macOS/Linux,
+  `QCM_LAN_HOST`, distribution des IP, dépannage), `GUIDE_PROF.md` (§2.3,
+  §4.2, §4.4, FAQ, §8), `README.md`, ADR 0013 et prompt de la session.
+- Captures `docs/screenshots/v4/avant-presentation-pause.png` (baseline
+  `8897819`, questions en pause) et `docs/screenshots/v4/apres-presentation-stats.png`
+  (branche, mêmes données, barres et ✓), même viewport 1600×900, thème sombre.
+
+**Vérifications.** `pytest` : 268 tests passés. `ruff check .`,
+`python manage.py check`, `python manage.py makemigrations --check --dry-run` :
+OK. `scripts/test_charge.py` contre `runserver` : 100 réussites, 0 échec,
+100 réponses en base. Test navigateur sur une session courte : la page de
+présentation passe en pause à la fin du minuteur et affiche les statistiques.
+Captures avant/après vérifiées.
+
+**Décisions.** ADR 0013. En Mode Présentation, la fin d'étape met la séance en
+pause pour lire les statistiques ; le professeur avance avec « Suivant ».
+Sans Mode Présentation, l'auto-avance V1 reste le défaut, avec 2 s de marge
+pour éviter la course. Le verrou d'écriture SQLite est local au processus et
+sans effet sous PostgreSQL ; une installation multi-workers SQLite devrait
+utiliser un cache/base partagé ou PostgreSQL. Le test de charge étale les
+connexions de 20 ms à cause de la file d'attente de 10 de `runserver`, pas
+pour sérialiser les réponses.
+
+**Reste à faire / limites.** `SPEC.md`, `ARCHITECTURE.md` et `ROADMAP.md` ne
+sont pas modifiés (mise à jour humaine attendue). Revue humaine et fusion
+manuelle attendues (aucun auto-merge). Le verrou SQLite et l'étalement des
+connexions sont des limites du serveur de développement local ; une salle
+réelle de 100 téléphones gagnera à utiliser un serveur WSGI de production.
+
+**Correctif post-test (2026-11-17).** Le premier test du hotspot Linux a
+utilisé `wlan0`, qui n'existe pas sur le portable testé (interface `wlo1`) :
+la commande a créé un profil `qcm-hotspot` inutilisable, puis `nmcli
+connection up` a échoué sur « mismatching interface name ». `docs/MODE_LOCAL.md`
+demande désormais de relever l'interface Wi-Fi (`nmcli device status` / `iw
+dev`), donne `wlo1` en exemple et documente la suppression/recréation du
+profil avec le bon `ifname`. Une section « Après la séance » (8) couvre
+l'arrêt du serveur et du hotspot, la reconnexion au Wi-Fi habituel, le retrait
+de la règle de pare-feu (ufw, firewalld, Windows, macOS), le retour des élèves
+sur leur réseau et la conservation de `db.sqlite3`.
+
+**Correctif KaTeX hors connexion (2026-11-17).** Le test en hotspot a montré
+que KaTeX était encore chargé depuis le CDN : sans Internet, les formules
+restaient affichées en `$…$`. KaTeX 0.16.11 (licence MIT) est désormais
+vendorisé dans `static/qcm/katex/` (CSS, JS, auto-render et polices) et les
+pages tableau/présentation le chargent avec `{% static %}`. Un test
+`qcm/tests/test_katex.py` vérifie l'absence de CDN et la présence des fichiers ;
+une capture hors ligne montre les formules rendues.

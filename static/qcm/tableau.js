@@ -11,6 +11,10 @@
   let interval = null;
   let etape = config.etape;
   let statut = config.statut;
+  const estPresentation = config.presentation === true;
+  let timerFin = null;
+  let finDeclenchee = false;
+  let derniereFinSecondes = null;
 
   function afficherMinuteur() {
     if (secondes === null) {
@@ -80,6 +84,50 @@
     });
   });
 
+  async function pauserFinEtape() {
+    if (!estPresentation || finDeclenchee) return;
+    finDeclenchee = true;
+    try {
+      await fetch("/api/piloter/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": config.csrf || getCookie("csrftoken"),
+        },
+        body: JSON.stringify({
+          code,
+          action: "pause_fin_etape",
+          etape,
+        }),
+      });
+    } catch (erreur) {
+      // Le rechargement ci-dessous affichera l'état réel du serveur.
+    }
+    window.location.reload();
+  }
+
+  function programmerFinPresentation(secondesRestantes) {
+    if (!estPresentation || statut !== "en_cours" || finDeclenchee) return;
+    if (typeof secondesRestantes !== "number") return;
+    // Ne pas repousser le minuteur à chaque polling : on ne le reprogramme
+    // que si le professeur a ajouté du temps (le temps restant remonte).
+    if (
+      timerFin !== null &&
+      derniereFinSecondes !== null &&
+      secondesRestantes <= derniereFinSecondes
+    ) {
+      return;
+    }
+    derniereFinSecondes = secondesRestantes;
+    if (timerFin) clearTimeout(timerFin);
+    // Le délai est réancré sur le temps restant calculé par le serveur. On
+    // ajoute une seconde de sécurité (arrondi bas de ``temps_restant_s``)
+    // pour ne pas couper l'étape en avance ; la marge serveur de 2 s couvre
+    // ce retard.
+    const delai = (Math.max(0, secondesRestantes) + 1) * 1000 + 100;
+    timerFin = setTimeout(pauserFinEtape, delai);
+  }
+
   async function rafraichir() {
     try {
       const reponse = await fetch(
@@ -106,6 +154,9 @@
         donnees.temps_restant_s,
         donnees.statut === "en_cours"
       );
+      if (estPresentation && donnees.statut === "en_cours") {
+        programmerFinPresentation(donnees.temps_restant_s);
+      }
     } catch (erreur) {
       // Silence : le prochain poll réessaiera.
     } finally {
@@ -114,5 +165,6 @@
   }
 
   reglerMinuteur(config.temps, config.statut === "en_cours");
+  programmerFinPresentation(config.temps);
   setTimeout(rafraichir, 1000);
 })();

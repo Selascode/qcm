@@ -187,3 +187,58 @@ def test_equation_du_temps_restant_suit_ends_at(proprietaire):
     )
     session.refresh_from_db()
     assert services.temps_restant_s(session) == 0
+
+
+def test_auto_avance_apres_la_marge_de_fin(proprietaire):
+    session = demarrer(construire(proprietaire))
+
+    Session.objects.filter(pk=session.pk).update(
+        ends_at=timezone.now() - timedelta(seconds=1)
+    )
+    session.refresh_from_db()
+
+    assert services.avancer_si_necessaire(session).etape_courante == 1
+    assert services.temps_restant_s(session) == 0
+
+    Session.objects.filter(pk=session.pk).update(
+        ends_at=timezone.now()
+        - timedelta(seconds=services.MARGE_FIN_ETAPE_S + 1)
+    )
+    session.refresh_from_db()
+
+    assert services.avancer_si_necessaire(session).etape_courante == 2
+
+
+def test_fin_etape_atteinte_en_pause_ou_apres_ends_at(proprietaire):
+    session = demarrer(construire(proprietaire))
+    assert services.fin_etape_atteinte(session) is False
+
+    Session.objects.filter(pk=session.pk).update(
+        ends_at=timezone.now() - timedelta(seconds=1)
+    )
+    session.refresh_from_db()
+    assert services.fin_etape_atteinte(session) is True
+
+    session = services.mettre_en_pause_fin_etape(session, 1)
+    assert session.statut == Session.STATUT_PAUSE
+    assert session.reste_en_pause == 0
+    assert session.ends_at is None
+    assert services.fin_etape_atteinte(session) is True
+
+
+def test_pause_fin_etape_idempotente(proprietaire):
+    session = demarrer(construire(proprietaire))
+
+    session = services.mettre_en_pause_fin_etape(session, 1)
+    assert session.statut == Session.STATUT_PAUSE
+
+    session = services.mettre_en_pause_fin_etape(session, 1)
+    assert session.statut == Session.STATUT_PAUSE
+
+
+@pytest.mark.parametrize("etape", [2, "1", True, None])
+def test_pause_fin_etape_refuse_une_etape_invalide(proprietaire, etape):
+    session = demarrer(construire(proprietaire))
+
+    with pytest.raises(services.ErreurPilotage):
+        services.mettre_en_pause_fin_etape(session, etape)

@@ -527,16 +527,26 @@ def reinitialiser_appareil(request, code: str, participant_id: int):
 
 @login_required
 def presentation(request, code: str):
-    """Vue plein écran : questions, timer et compteurs, sans aucun contrôle."""
+    """Vue plein écran : questions ou statistiques de fin d'étape.
+
+    À la fin du minuteur (ou pendant une pause), les questions laissent place
+    à la répartition des réponses. La page déclenche elle-même la pause de fin
+    d'étape auprès du serveur, pour que le professeur puisse commenter les
+    statistiques puis avancer avec « Suivant » depuis le tableau.
+    """
     session = _session_prof(request, code)
     session = services.avancer_si_necessaire(session)
+    fin_etape = services.fin_etape_atteinte(session)
     cartes, nb_reponses_etape = _cartes_etape(session)
+    statistiques = services.statistiques_etape(session) if fin_etape else []
     return render(
         request,
         "qcm/presentation.html",
         {
             "session": session,
             "cartes": cartes,
+            "fin_etape": fin_etape,
+            "statistiques": statistiques,
             "nb_etapes": services.nombre_etapes(session),
             "nb_participants": session.participants.count(),
             "nb_reponses": session.answers.count(),
